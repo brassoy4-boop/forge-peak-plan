@@ -108,6 +108,15 @@ export default function Foro() {
               <DialogHeader><DialogTitle>Nuevo hilo</DialogTitle></DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-2"><Label>Título</Label><Input value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Oposición (opcional)</Label>
+                  <Select value={form.oposicion_id} onValueChange={(v) => setForm({ ...form, oposicion_id: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">General (sin oposición)</SelectItem>
+                      {oposiciones.map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2"><Label>Mensaje inicial</Label><Textarea value={form.contenido} onChange={(e) => setForm({ ...form, contenido: e.target.value })} /></div>
               </div>
               <DialogFooter><Button onClick={createThread}>Publicar</Button></DialogFooter>
@@ -115,6 +124,18 @@ export default function Foro() {
           </Dialog>
         }
       />
+
+      <div className="mb-4 max-w-xs">
+        <Label className="text-xs">Filtrar por oposición</Label>
+        <Select value={filterOpo} onValueChange={setFilterOpo}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos</SelectItem>
+            <SelectItem value="__none__">Solo generales</SelectItem>
+            {oposiciones.map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
       {!selected ? (
         <div className="space-y-2">
           {threads.map(t => {
@@ -125,7 +146,11 @@ export default function Foro() {
                   <MessageSquare className="h-5 w-5 text-primary shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{t.titulo}</div>
-                    <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(t.updated_at).toLocaleDateString("es-ES")}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {author ? `${author.nombre} ${author.apellidos}` : "—"}
+                      {t.oposiciones?.nombre && <span> · {t.oposiciones.nombre}</span>}
+                      <span> · {new Date(t.updated_at).toLocaleDateString("es-ES")}</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
