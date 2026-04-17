@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
 import AuthPage from "./pages/Auth";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Oposiciones from "./pages/Oposiciones";
 import Marcas from "./pages/Marcas";
@@ -21,6 +22,7 @@ import Chat from "./pages/Chat";
 import Usuarios from "./pages/Usuarios";
 import CargaMasiva from "./pages/CargaMasiva";
 import Admin from "./pages/Admin";
+import Perfil from "./pages/Perfil";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -35,8 +37,10 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/app" replace />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/app" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route index element={<Dashboard />} />
+              <Route path="perfil" element={<Perfil />} />
               <Route path="oposiciones" element={<Oposiciones />} />
               <Route path="marcas" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Marcas /></ProtectedRoute>} />
               <Route path="simulacros" element={<Simulacros />} />
