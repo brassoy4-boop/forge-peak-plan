@@ -488,6 +488,39 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          contenido: string | null
+          created_at: string
+          id: string
+          leida: boolean
+          link: string | null
+          tipo: string
+          titulo: string
+          user_id: string
+        }
+        Insert: {
+          contenido?: string | null
+          created_at?: string
+          id?: string
+          leida?: boolean
+          link?: string | null
+          tipo: string
+          titulo: string
+          user_id: string
+        }
+        Update: {
+          contenido?: string | null
+          created_at?: string
+          id?: string
+          leida?: boolean
+          link?: string | null
+          tipo?: string
+          titulo?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       oposiciones: {
         Row: {
           created_at: string
@@ -650,6 +683,7 @@ export type Database = {
           activo: boolean
           altura: number | null
           apellidos: string
+          avatar_url: string | null
           created_at: string
           email: string | null
           fecha_nacimiento: string | null
@@ -666,6 +700,7 @@ export type Database = {
           activo?: boolean
           altura?: number | null
           apellidos?: string
+          avatar_url?: string | null
           created_at?: string
           email?: string | null
           fecha_nacimiento?: string | null
@@ -682,6 +717,7 @@ export type Database = {
           activo?: boolean
           altura?: number | null
           apellidos?: string
+          avatar_url?: string | null
           created_at?: string
           email?: string | null
           fecha_nacimiento?: string | null

@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Image as ImageIcon, Pencil, Archive, Power } from "lucide-react";
+import { Plus, Image as ImageIcon, Pencil, Archive, Power, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
+import { FileUploader } from "@/components/FileUploader";
 
 export default function Ejercicios() {
   const { primaryRole } = useAuth();
@@ -23,7 +24,7 @@ export default function Ejercicios() {
   const [openEx, setOpenEx] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [catForm, setCatForm] = useState({ nombre: "" });
-  const [exForm, setExForm] = useState({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
+  const [exForm, setExForm] = useState({ nombre: "", category_id: "", descripcion: "", imagen_url: "", video_url: "", instrucciones: "" });
 
   const load = async () => {
     const [c, e] = await Promise.all([
@@ -45,11 +46,13 @@ export default function Ejercicios() {
       setEditing(ex);
       setExForm({
         nombre: ex.nombre, category_id: ex.category_id ?? "",
-        descripcion: ex.descripcion ?? "", imagen_url: ex.imagen_url ?? "", instrucciones: ex.instrucciones ?? "",
+        descripcion: ex.descripcion ?? "", imagen_url: ex.imagen_url ?? "",
+        video_url: ex.video_url ?? "",
+        instrucciones: ex.instrucciones ?? "",
       });
     } else {
       setEditing(null);
-      setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
+      setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", video_url: "", instrucciones: "" });
     }
     setOpenEx(true);
   };
@@ -65,7 +68,7 @@ export default function Ejercicios() {
       toast.success("Ejercicio creado");
     }
     setOpenEx(false); setEditing(null);
-    setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
+    setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", video_url: "", instrucciones: "" });
     load();
   };
 
@@ -92,7 +95,7 @@ export default function Ejercicios() {
             </Dialog>
             <Dialog open={openEx} onOpenChange={setOpenEx}>
               <DialogTrigger asChild><Button onClick={() => openExerciseDialog()}><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>{editing ? "Editar ejercicio" : "Nuevo ejercicio"}</DialogTitle></DialogHeader>
                 <div className="space-y-3">
                   <div className="space-y-2"><Label>Nombre</Label><Input value={exForm.nombre} onChange={(e) => setExForm({ ...exForm, nombre: e.target.value })} /></div>
@@ -102,7 +105,15 @@ export default function Ejercicios() {
                       <SelectContent>{cats.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2"><Label>URL imagen</Label><Input value={exForm.imagen_url} onChange={(e) => setExForm({ ...exForm, imagen_url: e.target.value })} /></div>
+                  <div className="space-y-2">
+                    <Label>Imagen</Label>
+                    <FileUploader folder="exercises" value={exForm.imagen_url} onChange={(url) => setExForm({ ...exForm, imagen_url: url ?? "" })} accept="image/*" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vídeo (mp4) o URL externa (YouTube/Vimeo)</Label>
+                    <FileUploader folder="exercises-video" value={exForm.video_url} onChange={(url) => setExForm({ ...exForm, video_url: url ?? "" })} accept="video/*" preview={false} />
+                    <Input placeholder="o pega un enlace YouTube/Vimeo" value={exForm.video_url} onChange={(e) => setExForm({ ...exForm, video_url: e.target.value })} />
+                  </div>
                   <div className="space-y-2"><Label>Descripción</Label><Textarea value={exForm.descripcion} onChange={(e) => setExForm({ ...exForm, descripcion: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Instrucciones</Label><Textarea value={exForm.instrucciones} onChange={(e) => setExForm({ ...exForm, instrucciones: e.target.value })} /></div>
                 </div>
@@ -135,6 +146,11 @@ export default function Ejercicios() {
                 <Badge variant="outline">{cats.find(c => c.id === ex.category_id)?.nombre ?? "—"}</Badge>
               </div>
               {ex.descripcion && <p className="text-sm text-muted-foreground line-clamp-2">{ex.descripcion}</p>}
+              {ex.video_url && (
+                <a href={ex.video_url} target="_blank" rel="noreferrer" className="text-xs text-primary inline-flex items-center gap-1 mt-1">
+                  <PlayCircle className="h-3 w-3" /> Ver vídeo
+                </a>
+              )}
             </CardHeader>
             {isCoach && (
               <CardContent className="flex gap-2 pt-0">

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { Plus, Target, ChevronDown, ChevronUp, Archive } from "lucide-react";
 import { toast } from "sonner";
+import { canExecuteSimulacro, isValidTime, isValidNumber, type Sexo } from "@/lib/validators";
 
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
@@ -83,8 +84,30 @@ export default function Simulacros() {
     setResults({}); setObs(""); setTargetUserId(user?.id ?? "");
   };
 
+  // Validación de sexo del usuario destino vs sexo de la plantilla
+  const [targetSexo, setTargetSexo] = useState<Sexo | null>(null);
+  useEffect(() => {
+    if (!running || !targetUserId) { setTargetSexo(null); return; }
+    supabase.from("profiles").select("sexo").eq("user_id", targetUserId).maybeSingle()
+      .then(({ data }) => setTargetSexo((data?.sexo as Sexo) ?? null));
+  }, [running, targetUserId]);
+  const sexoCheck = running ? canExecuteSimulacro(running.sexo as Sexo, targetSexo) : { ok: true };
+
   const saveRun = async () => {
     if (!running || !targetUserId) return;
+    if (!sexoCheck.ok) return toast.error(sexoCheck.reason ?? "No autorizado");
+    // Validar formato por tipo de marca
+    for (const stm of running.simulacro_template_marks ?? []) {
+      const v = results[stm.mark_id];
+      if (!v) continue;
+      const tipo = stm.marks?.value_type;
+      if (tipo === "tiempo" && !isValidTime(v)) {
+        return toast.error(`Tiempo inválido en "${stm.marks?.nombre}". Usa mm:ss o mm:ss.cc`);
+      }
+      if (["distancia","repeticiones","peso","puntuacion"].includes(tipo) && !isValidNumber(v)) {
+        return toast.error(`Valor numérico inválido en "${stm.marks?.nombre}"`);
+      }
+    }
     const { data: ex, error } = await supabase.from("simulacro_executions").insert({
       template_id: running.id, user_id: targetUserId, coach_id: isCoach ? user?.id : null, observaciones: obs,
     }).select().single();
@@ -98,6 +121,15 @@ export default function Simulacros() {
         user_id: targetUserId, mark_id: r.mark_id, valor_numerico: r.valor_numerico, valor_texto: r.valor_texto,
         origen: "simulacro" as const, origen_ref: ex.id, registrado_por: user?.id,
       })));
+    }
+    // Notificar al deportista si lo hizo el entrenador
+    if (isCoach && targetUserId !== user?.id) {
+      await supabase.from("notifications").insert({
+        user_id: targetUserId, tipo: "simulacro",
+        titulo: "Nuevo simulacro registrado",
+        contenido: `Tu entrenador ha registrado los resultados de "${running.nombre}".`,
+        link: "/app/evolucion",
+      });
     }
     toast.success("Resultados guardados"); setRunning(null); load();
   };
@@ -172,15 +204,24 @@ export default function Simulacros() {
                 </Select>
               </div>
             )}
+            {!sexoCheck.ok && (
+              <div className="rounded border border-destructive/50 bg-destructive/10 text-destructive text-sm p-2">
+                ⚠ {sexoCheck.reason}
+              </div>
+            )}
             {running.simulacro_template_marks?.map((stm: any) => (
               <div key={stm.mark_id} className="grid grid-cols-3 items-center gap-2">
                 <Label>{stm.marks?.nombre}</Label>
-                <Input placeholder={stm.marks?.unidad ?? ""} value={results[stm.mark_id] ?? ""} onChange={(e) => setResults({ ...results, [stm.mark_id]: e.target.value })} />
-                <span className="text-xs text-muted-foreground">{stm.marks?.unidad}</span>
+                <Input
+                  placeholder={stm.marks?.value_type === "tiempo" ? "mm:ss.cc" : (stm.marks?.unidad ?? "")}
+                  value={results[stm.mark_id] ?? ""}
+                  onChange={(e) => setResults({ ...results, [stm.mark_id]: e.target.value })}
+                />
+                <span className="text-xs text-muted-foreground">{stm.marks?.unidad} · {stm.marks?.value_type}</span>
               </div>
             ))}
             <div className="space-y-2"><Label>Observaciones</Label><Input value={obs} onChange={(e) => setObs(e.target.value)} /></div>
-            <div className="flex gap-2"><Button onClick={saveRun}>Guardar</Button><Button variant="outline" onClick={() => setRunning(null)}>Cancelar</Button></div>
+            <div className="flex gap-2"><Button onClick={saveRun} disabled={!sexoCheck.ok}>Guardar</Button><Button variant="outline" onClick={() => setRunning(null)}>Cancelar</Button></div>
           </CardContent>
         </Card>
       )}

@@ -89,8 +89,18 @@ export default function Diario() {
   const saveComment = async (entryId: string) => {
     const txt = commentDraft[entryId] ?? "";
     if (!txt.trim()) return;
+    const entry = entries.find((x) => x.id === entryId);
     const { error } = await supabase.from("diary_entries").update({ comentario_entrenador: txt }).eq("id", entryId);
     if (error) return toast.error(error.message);
+    // Notificar al deportista
+    if (entry && entry.user_id !== user?.id) {
+      await supabase.from("notifications").insert({
+        user_id: entry.user_id, tipo: "diario",
+        titulo: "Tu entrenador comentó tu diario",
+        contenido: txt.slice(0, 80),
+        link: "/app/diario",
+      });
+    }
     toast.success("Comentario guardado");
     setCommentDraft((p) => ({ ...p, [entryId]: "" }));
     loadEntries();
