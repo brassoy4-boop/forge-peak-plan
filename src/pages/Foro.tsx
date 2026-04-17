@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageSquare, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,12 +17,19 @@ interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 export default function Foro() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<any[]>([]);
+  const [oposiciones, setOposiciones] = useState<any[]>([]);
+  const [filterOpo, setFilterOpo] = useState<string>("__all__");
   const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>({});
   const [selected, setSelected] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ titulo: "", contenido: "" });
+  const [form, setForm] = useState({ titulo: "", contenido: "", oposicion_id: "__none__" });
   const [reply, setReply] = useState("");
+
+  const loadOpos = async () => {
+    const { data } = await supabase.from("oposiciones").select("id, nombre").order("nombre");
+    setOposiciones(data ?? []);
+  };
 
   const loadThreads = async () => {
     const { data } = await supabase.from("forum_threads").select("*").order("updated_at", { ascending: false });
