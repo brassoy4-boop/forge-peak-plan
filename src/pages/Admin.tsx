@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Save, ShieldAlert } from "lucide-react";
+import { Save, ShieldAlert, Plus, Loader2 } from "lucide-react";
 
 export default function Admin() {
   const { user } = useAuth();
@@ -18,11 +19,14 @@ export default function Admin() {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [newRole, setNewRole] = useState<Record<string, string>>({});
+  const [openCoach, setOpenCoach] = useState(false);
+  const [coachForm, setCoachForm] = useState({ email: "", password: "", nombre: "", apellidos: "" });
+  const [creating, setCreating] = useState(false);
 
   const load = async () => {
     const [s, p, r] = await Promise.all([
       supabase.from("app_settings").select("*").eq("key", "access_pin").maybeSingle(),
-      supabase.from("profiles").select("*"),
+      supabase.from("profiles").select("*").order("created_at", { ascending: false }),
       supabase.from("user_roles").select("*"),
     ]);
     setPin(s.data?.value ?? "");
@@ -31,8 +35,8 @@ export default function Admin() {
   useEffect(() => { load(); }, []);
 
   const savePin = async () => {
-    const { error } = await supabase.from("app_settings").update({ value: pin }).eq("key", "access_pin");
-    if (error) return toast.error(error.message);
+    const { data, error } = await supabase.rpc("set_access_pin", { _pin: pin });
+    if (error || !data) return toast.error(error?.message ?? "No se pudo actualizar");
     toast.success("PIN actualizado");
   };
 
@@ -48,9 +52,31 @@ export default function Admin() {
     load();
   };
 
+  const createCoach = async () => {
+    if (!coachForm.email || !coachForm.password) return toast.error("Email y contraseña requeridos");
+    setCreating(true);
+    const { data, error } = await supabase.functions.invoke("create-user", {
+      body: {
+        email: coachForm.email,
+        password: coachForm.password,
+        nombre: coachForm.nombre,
+        apellidos: coachForm.apellidos,
+        role: "entrenador",
+      },
+    });
+    setCreating(false);
+    if (error || (data as any)?.error) {
+      return toast.error((data as any)?.error ?? error?.message ?? "Error");
+    }
+    toast.success("Entrenador creado");
+    setOpenCoach(false);
+    setCoachForm({ email: "", password: "", nombre: "", apellidos: "" });
+    load();
+  };
+
   return (
     <div>
-      <PageHeader title="Configuración" description="PIN global, roles y permisos." />
+      <PageHeader title="Configuración" description="PIN global, entrenadores, roles y permisos." />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardHeader>
@@ -62,9 +88,39 @@ export default function Admin() {
             <Button onClick={savePin}><Save className="mr-2 h-4 w-4" /> Guardar PIN</Button>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Entrenadores</CardTitle>
+            <CardDescription>Solo el superadmin puede crear cuentas de entrenador.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Dialog open={openCoach} onOpenChange={setOpenCoach}>
+              <DialogTrigger asChild>
+                <Button><Plus className="mr-2 h-4 w-4" /> Nuevo entrenador</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Crear entrenador</DialogTitle></DialogHeader>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2"><Label>Nombre</Label><Input value={coachForm.nombre} onChange={(e) => setCoachForm({ ...coachForm, nombre: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>Apellidos</Label><Input value={coachForm.apellidos} onChange={(e) => setCoachForm({ ...coachForm, apellidos: e.target.value })} /></div>
+                  </div>
+                  <div className="space-y-2"><Label>Email</Label><Input type="email" value={coachForm.email} onChange={(e) => setCoachForm({ ...coachForm, email: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Contraseña temporal</Label><Input type="password" value={coachForm.password} onChange={(e) => setCoachForm({ ...coachForm, password: e.target.value })} /></div>
+                </div>
+                <DialogFooter>
+                  <Button onClick={createCoach} disabled={creating}>
+                    {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Crear entrenador
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
       </div>
       <Card>
-        <CardHeader><CardTitle>Roles y permisos</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Roles y permisos</CardTitle><CardDescription>Click en un rol para quitarlo.</CardDescription></CardHeader>
         <CardContent>
           <Table>
             <TableHeader><TableRow><TableHead>Usuario</TableHead><TableHead>Email</TableHead><TableHead>Roles</TableHead><TableHead className="text-right">Asignar</TableHead></TableRow></TableHeader>
