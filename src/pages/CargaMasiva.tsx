@@ -377,3 +377,138 @@ export default function CargaMasiva() {
     </div>
   );
 }
+
+// ---------- Importador Excel/CSV ----------
+interface ImportProps {
+  marks: any[];
+  profiles: any[];
+  testLabel: string;
+  userId?: string;
+  onImported: () => void;
+}
+
+interface RowError { row: number; col: string; reason: string; }
+
+function ImportExcelPanel({ marks, profiles, testLabel, userId, onImported }: ImportProps) {
+  const [parsed, setParsed] = useState<any[][]>([]);
+  const [errors, setErrors] = useState<RowError[]>([]);
+  const [valid, setValid] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const downloadTemplate = () => {
+    const headers = ["email", "nombre", ...marks.slice(0, 5).map((m) => m.nombre)];
+    const example = ["deportista@correo.com", "Nombre Apellidos", ...marks.slice(0, 5).map((m) => m.value_type === "tiempo" ? "04:30.00" : "10")];
+    const ws = XLSX.utils.aoa_to_sheet([headers, example]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Marcas");
+    XLSX.writeFile(wb, "plantilla_carga_masiva.xlsx");
+  };
+
+  const handleFile = async (file: File) => {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+    setParsed(rows);
+    validate(rows);
+  };
+
+  const validate = (rows: any[][]) => {
+    if (rows.length < 2) { setErrors([{ row: 0, col: "—", reason: "Archivo vacío o sin cabecera" }]); setValid([]); return; }
+    const header = rows[0].map((h) => String(h).trim());
+    const emailIdx = header.findIndex((h) => h.toLowerCase() === "email");
+    if (emailIdx === -1) { setErrors([{ row: 1, col: "email", reason: "Falta la columna 'email'" }]); setValid([]); return; }
+    // Mapear columnas a marcas
+    const colToMark: Record<number, any> = {};
+    header.forEach((h, idx) => {
+      const m = marks.find((mk) => mk.nombre.toLowerCase() === h.toLowerCase());
+      if (m) colToMark[idx] = m;
+    });
+    const errs: RowError[] = [];
+    const ok: any[] = [];
+    for (let r = 1; r < rows.length; r++) {
+      const row = rows[r];
+      if (!row || row.every((c) => !c)) continue;
+      const email = String(row[emailIdx] ?? "").trim().toLowerCase();
+      if (!email) { errs.push({ row: r + 1, col: "email", reason: "Email vacío" }); continue; }
+      const profile = profiles.find((p: any) => (p.email ?? "").toLowerCase() === email);
+      if (!profile) { errs.push({ row: r + 1, col: "email", reason: `No existe deportista con email "${email}"` }); continue; }
+      for (const [idxStr, mark] of Object.entries(colToMark)) {
+        const idx = Number(idxStr);
+        const raw = String(row[idx] ?? "").trim();
+        if (!raw) continue;
+        const tipo = mark.value_type;
+        let valor_numerico: number | null = null;
+        let valor_texto: string | null = null;
+        if (tipo === "tiempo") {
+          if (!isValidTime(raw)) { errs.push({ row: r + 1, col: header[idx], reason: `Tiempo inválido "${raw}" (usa mm:ss o mm:ss.cc)` }); continue; }
+          const sec = Number(raw.includes(":") ? raw : raw.replace(",", "."));
+          valor_numerico = sec; valor_texto = raw;
+        } else if (["distancia", "repeticiones", "peso", "puntuacion"].includes(tipo)) {
+          if (!isValidNumber(raw)) { errs.push({ row: r + 1, col: header[idx], reason: `Valor numérico inválido "${raw}"` }); continue; }
+          valor_numerico = Number(raw.replace(",", "."));
+        } else {
+          valor_texto = raw;
+        }
+        ok.push({
+          user_id: profile.user_id, mark_id: mark.id,
+          valor_numerico, valor_texto,
+          origen: "importacion" as const,
+          registrado_por: userId,
+          observaciones: testLabel,
+        });
+      }
+    }
+    setErrors(errs); setValid(ok);
+  };
+
+  const importAll = async () => {
+    if (!valid.length) return toast.error("Nada válido que importar");
+    setSaving(true);
+    const { error } = await supabase.from("mark_records").insert(valid);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success(`${valid.length} registros importados`);
+    setParsed([]); setErrors([]); setValid([]);
+    onImported();
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="flex items-center gap-2"><FileSpreadsheet className="h-5 w-5 text-primary" /> Importar desde Excel/CSV</CardTitle>
+          <Button size="sm" variant="outline" onClick={downloadTemplate}><Download className="mr-2 h-3 w-3" /> Plantilla</Button>
+        </div>
+        <CardDescription>
+          Cabecera obligatoria: <code>email</code>. Una columna por cada nombre exacto de marca activa.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+        {parsed.length > 0 && (
+          <div className="text-sm space-y-2">
+            <p>Filas leídas: <strong>{parsed.length - 1}</strong> · Registros válidos: <strong className="text-primary">{valid.length}</strong> · Errores: <strong className="text-destructive">{errors.length}</strong></p>
+            {errors.length > 0 && (
+              <div className="border rounded max-h-64 overflow-y-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Fila</TableHead><TableHead>Columna</TableHead><TableHead>Motivo</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {errors.map((e, i) => (
+                      <TableRow key={i}><TableCell>{e.row}</TableCell><TableCell>{e.col}</TableCell><TableCell className="text-destructive">{e.reason}</TableCell></TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            <Button onClick={importAll} disabled={saving || valid.length === 0}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+              Importar {valid.length} registros
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
