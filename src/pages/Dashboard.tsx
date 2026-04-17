@@ -9,6 +9,8 @@ import { Link } from "react-router-dom";
 export default function Dashboard() {
   const { primaryRole, user } = useAuth();
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [lastDiary, setLastDiary] = useState<any | null>(null);
+  const [activeRoutines, setActiveRoutines] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -26,6 +28,12 @@ export default function Dashboard() {
           simulacros: simulacros.count ?? 0,
           marcas: marcas.count ?? 0,
         });
+        const [diary, ra] = await Promise.all([
+          supabase.from("diary_entries").select("fecha, descripcion, session_types(nombre)").eq("user_id", user.id).order("fecha", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("routine_assignments").select("*, routines(nombre, num_dias)").eq("user_id", user.id).eq("activa", true),
+        ]);
+        setLastDiary(diary.data);
+        setActiveRoutines(ra.data ?? []);
       } else {
         const [usuarios, opos, simulacros, ejercicios] = await Promise.all([
           supabase.from("profiles").select("id", { count: "exact", head: true }),
