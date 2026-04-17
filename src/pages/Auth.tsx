@@ -10,7 +10,7 @@ import { useAuth, PIN_STORAGE_KEY } from "@/lib/auth";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck } from "lucide-react";
 
-type Step = "credentials" | "pin" | "bootstrap";
+type Step = "credentials" | "pin" | "bootstrap" | "forgot";
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -68,6 +68,19 @@ export default function AuthPage() {
     navigate("/app", { replace: true });
   };
 
+  const onForgot = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) return toast.error("Indica tu email");
+    setSubmitting(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setSubmitting(false);
+    if (error) return toast.error(error.message);
+    toast.success("Te hemos enviado un enlace de recuperación.");
+    setStep("credentials");
+  };
+
   const onBootstrap = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -118,11 +131,13 @@ export default function AuthPage() {
                 {step === "credentials" && "Acceso al sistema"}
                 {step === "pin" && "Verificación PIN"}
                 {step === "bootstrap" && "Crear superadmin inicial"}
+                {step === "forgot" && "Recuperar contraseña"}
               </CardTitle>
               <CardDescription>
                 {step === "credentials" && "Introduce tus credenciales de Corpore10."}
                 {step === "pin" && "Introduce el PIN de acceso del centro."}
                 {step === "bootstrap" && "No hay ningún superadmin todavía. Crea el primero ahora."}
+                {step === "forgot" && "Te enviaremos un enlace por email para restablecerla."}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -140,11 +155,30 @@ export default function AuthPage() {
                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Continuar
                   </Button>
+                  <Button type="button" variant="link" className="w-full text-xs" onClick={() => setStep("forgot")}>
+                    He olvidado mi contraseña
+                  </Button>
                   {needsBootstrap && (
                     <Button type="button" variant="outline" className="w-full" onClick={() => setStep("bootstrap")}>
                       Crear superadmin inicial
                     </Button>
                   )}
+                </form>
+              )}
+
+              {step === "forgot" && (
+                <form onSubmit={onForgot} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-r">Email</Label>
+                    <Input id="email-r" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Enviar enlace
+                  </Button>
+                  <Button type="button" variant="ghost" className="w-full" onClick={() => setStep("credentials")}>
+                    Volver
+                  </Button>
                 </form>
               )}
 
