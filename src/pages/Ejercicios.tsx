@@ -40,7 +40,7 @@ export default function Ejercicios() {
     toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
   };
 
-  const openEx = (ex?: any) => {
+  const openExDialog = (ex?: any) => {
     if (ex) {
       setEditing(ex);
       setExForm({
@@ -53,8 +53,6 @@ export default function Ejercicios() {
     }
     setOpenEx(true);
   };
-  const _setOpenEx = setOpenEx;
-
   const saveEx = async () => {
     const payload: any = { ...exForm, category_id: exForm.category_id || null };
     if (editing) {
