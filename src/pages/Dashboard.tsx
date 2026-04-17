@@ -9,6 +9,8 @@ import { Link } from "react-router-dom";
 export default function Dashboard() {
   const { primaryRole, user } = useAuth();
   const [stats, setStats] = useState<Record<string, number>>({});
+  const [lastDiary, setLastDiary] = useState<any | null>(null);
+  const [activeRoutines, setActiveRoutines] = useState<any[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -26,6 +28,12 @@ export default function Dashboard() {
           simulacros: simulacros.count ?? 0,
           marcas: marcas.count ?? 0,
         });
+        const [diary, ra] = await Promise.all([
+          supabase.from("diary_entries").select("fecha, descripcion, session_types(nombre)").eq("user_id", user.id).order("fecha", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("routine_assignments").select("*, routines(nombre, num_dias)").eq("user_id", user.id).eq("activa", true),
+        ]);
+        setLastDiary(diary.data);
+        setActiveRoutines(ra.data ?? []);
       } else {
         const [usuarios, opos, simulacros, ejercicios] = await Promise.all([
           supabase.from("profiles").select("id", { count: "exact", head: true }),
@@ -80,16 +88,53 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="brand-title">Bienvenido a Corpore10</CardTitle>
-          <CardDescription>
-            {primaryRole === "usuario"
-              ? "Consulta tus oposiciones, rutinas y registra tu diario diario para hacer seguimiento de tu progreso."
-              : "Gestiona deportistas, rutinas, simulacros y carga masiva de marcas desde el menú lateral."}
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      {primaryRole === "usuario" ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="brand-title text-lg">Última entrada del diario</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {lastDiary ? (
+                <div className="text-sm space-y-1">
+                  <div className="font-medium">{new Date(lastDiary.fecha).toLocaleDateString("es-ES")} · {lastDiary.session_types?.nombre ?? "Sin tipo"}</div>
+                  <p className="text-muted-foreground line-clamp-3">{lastDiary.descripcion ?? "—"}</p>
+                  <Link to="/app/diario" className="text-primary text-xs hover:underline">Ver diario →</Link>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Aún no has registrado ninguna sesión. <Link to="/app/diario" className="text-primary hover:underline">Crear ahora</Link></p>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="brand-title text-lg">Rutinas activas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activeRoutines.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tienes rutinas asignadas todavía.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {activeRoutines.map((r) => (
+                    <li key={r.id} className="text-sm flex justify-between">
+                      <span>{r.routines?.nombre}</span>
+                      <span className="text-muted-foreground">{r.routines?.num_dias} días</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/app/rutinas" className="text-primary text-xs hover:underline mt-2 inline-block">Ir a mis rutinas →</Link>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="brand-title">Bienvenido a Corpore10</CardTitle>
+            <CardDescription>Gestiona deportistas, rutinas, simulacros y carga masiva de marcas desde el menú lateral.</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, Dumbbell } from "lucide-react";
+import { Plus, Calendar, Dumbbell, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Rutinas() {
@@ -60,6 +60,41 @@ export default function Rutinas() {
     toast.success("Ejercicio añadido"); setExOpen(false); load();
   };
 
+  const removeExercise = async (id: string) => {
+    const { error } = await supabase.from("routine_exercises").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Ejercicio eliminado"); load();
+  };
+
+  const duplicateRoutine = async (r: any) => {
+    const { data: nr, error } = await supabase.from("routines").insert({
+      nombre: `${r.nombre} (copia)`, descripcion: r.descripcion, num_dias: r.num_dias, created_by: user?.id,
+    }).select().single();
+    if (error || !nr) return toast.error(error?.message ?? "Error");
+    const origDays = days.filter(d => d.routine_id === r.id);
+    if (origDays.length) {
+      const { data: newDays } = await supabase.from("routine_days").insert(
+        origDays.map(d => ({ routine_id: nr.id, dia_num: d.dia_num, nombre: d.nombre }))
+      ).select();
+      const dayIdMap: Record<string, string> = {};
+      origDays.forEach(od => {
+        const nd = (newDays ?? []).find((x: any) => x.dia_num === od.dia_num);
+        if (nd) dayIdMap[od.id] = nd.id;
+      });
+      const origEx = routineExercises.filter(re => origDays.some(d => d.id === re.routine_day_id));
+      if (origEx.length) {
+        await supabase.from("routine_exercises").insert(
+          origEx.map(e => ({
+            routine_day_id: dayIdMap[e.routine_day_id], exercise_id: e.exercise_id,
+            series: e.series, repeticiones: e.repeticiones, descanso: e.descanso,
+            tiempo: e.tiempo, carga: e.carga, observaciones: e.observaciones, orden: e.orden,
+          }))
+        );
+      }
+    }
+    toast.success("Rutina duplicada"); load();
+  };
+
   const visibleRoutines = primaryRole === "usuario"
     ? assignments.filter(a => a.activa).map(a => a.routines).filter(Boolean)
     : routines;
@@ -86,14 +121,20 @@ export default function Rutinas() {
       {!selected ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleRoutines.map((r) => (
-            <Card key={r.id} className="cursor-pointer hover:border-primary" onClick={() => { setSelected(r); setActiveDay(1); }}>
+            <Card key={r.id} className="hover:border-primary">
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="brand-title text-xl">{r.nombre}</CardTitle>
+                  <CardTitle className="brand-title text-xl cursor-pointer flex-1" onClick={() => { setSelected(r); setActiveDay(1); }}>{r.nombre}</CardTitle>
                   <Badge><Calendar className="mr-1 h-3 w-3" />{r.num_dias} días</Badge>
                 </div>
                 {r.descripcion && <CardDescription>{r.descripcion}</CardDescription>}
               </CardHeader>
+              {isCoach && (
+                <CardContent className="flex gap-2 pt-0">
+                  <Button size="sm" variant="outline" onClick={() => { setSelected(r); setActiveDay(1); }}>Editar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => duplicateRoutine(r)}><Copy className="h-3 w-3 mr-1" /> Duplicar</Button>
+                </CardContent>
+              )}
             </Card>
           ))}
           {visibleRoutines.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">No hay rutinas.</p>}
@@ -128,6 +169,11 @@ export default function Rutinas() {
                             <div className="font-medium">{ex?.nombre}</div>
                             <div className="text-xs text-muted-foreground">{re.series} series · {re.repeticiones} reps · descanso {re.descanso}</div>
                           </div>
+                          {isCoach && (
+                            <Button size="icon" variant="ghost" onClick={() => removeExercise(re.id)} title="Eliminar">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       );
                     })}
