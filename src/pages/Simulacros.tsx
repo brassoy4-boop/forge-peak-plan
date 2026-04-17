@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Target } from "lucide-react";
+import { Plus, Target, ChevronDown, ChevronUp, Archive } from "lucide-react";
 import { toast } from "sonner";
+
+interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
 export default function Simulacros() {
   const { user, primaryRole } = useAuth();
@@ -19,24 +21,38 @@ export default function Simulacros() {
   const [oposiciones, setOposiciones] = useState<any[]>([]);
   const [marks, setMarks] = useState<any[]>([]);
   const [executions, setExecutions] = useState<any[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>({});
+  const [users, setUsers] = useState<ProfileLite[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ nombre: "", oposicion_id: "", sexo: "unisex", descripcion: "", mark_ids: [] as string[] });
   const [running, setRunning] = useState<any | null>(null);
   const [results, setResults] = useState<Record<string, string>>({});
   const [obs, setObs] = useState("");
   const [targetUserId, setTargetUserId] = useState("");
-  const [users, setUsers] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [executionResults, setExecutionResults] = useState<Record<string, any[]>>({});
 
   const load = async () => {
-    const [t, o, m, e, u] = await Promise.all([
+    const [t, o, m, e] = await Promise.all([
       supabase.from("simulacro_templates").select("*, oposiciones(nombre), simulacro_template_marks(mark_id, marks(nombre, unidad, value_type))"),
       supabase.from("oposiciones").select("*"),
       supabase.from("marks").select("*").eq("status", "activo").order("nombre"),
-      user ? supabase.from("simulacro_executions").select("*, simulacro_templates(nombre, oposiciones(nombre))").order("fecha", { ascending: false }).limit(20) : Promise.resolve({ data: [] } as any),
-      isCoach ? supabase.from("profiles").select("user_id, nombre, apellidos") : Promise.resolve({ data: [] } as any),
+      user ? supabase.from("simulacro_executions").select("*, simulacro_templates(nombre, oposiciones(nombre))").order("fecha", { ascending: false }).limit(30) : Promise.resolve({ data: [] } as any),
     ]);
     setTemplates(t.data ?? []); setOposiciones(o.data ?? []); setMarks(m.data ?? []);
-    setExecutions(e.data ?? []); setUsers(u.data ?? []);
+    const execs = e.data ?? [];
+    setExecutions(execs);
+    if (isCoach) {
+      const { data: u } = await supabase.from("profiles").select("user_id, nombre, apellidos").order("nombre");
+      setUsers(u ?? []);
+    }
+    const ids = Array.from(new Set(execs.map((x: any) => x.user_id)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
+      const m2: Record<string, ProfileLite> = {};
+      (profs ?? []).forEach((p: any) => { m2[p.user_id] = p; });
+      setProfilesMap(m2);
+    }
   };
   useEffect(() => { load(); }, [user, primaryRole]);
 
@@ -57,6 +73,11 @@ export default function Simulacros() {
     load();
   };
 
+  const archiveTpl = async (id: string) => {
+    await supabase.from("simulacro_templates").update({ status: "archivado" }).eq("id", id);
+    toast.success("Plantilla archivada"); load();
+  };
+
   const startRun = (tpl: any) => {
     setRunning(tpl);
     setResults({}); setObs(""); setTargetUserId(user?.id ?? "");
@@ -73,7 +94,6 @@ export default function Simulacros() {
     }));
     if (rows.length) {
       await supabase.from("simulacro_results").insert(rows);
-      // also save to mark_records
       await supabase.from("mark_records").insert(rows.map(r => ({
         user_id: targetUserId, mark_id: r.mark_id, valor_numerico: r.valor_numerico, valor_texto: r.valor_texto,
         origen: "simulacro" as const, origen_ref: ex.id, registrado_por: user?.id,
@@ -81,6 +101,17 @@ export default function Simulacros() {
     }
     toast.success("Resultados guardados"); setRunning(null); load();
   };
+
+  const toggleExpand = async (execId: string) => {
+    if (expanded === execId) { setExpanded(null); return; }
+    setExpanded(execId);
+    if (!executionResults[execId]) {
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", execId);
+      setExecutionResults((p) => ({ ...p, [execId]: data ?? [] }));
+    }
+  };
+
+  const visibleTemplates = templates.filter((t) => isCoach || t.status === "activo");
 
   return (
     <div>
@@ -155,36 +186,65 @@ export default function Simulacros() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {templates.map((t) => (
-          <Card key={t.id}>
+        {visibleTemplates.map((t) => (
+          <Card key={t.id} className={t.status !== "activo" ? "opacity-60" : ""}>
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <CardTitle className="brand-title text-xl flex items-center gap-2"><Target className="h-5 w-5 text-primary" />{t.nombre}</CardTitle>
-                <Badge variant="outline">{t.sexo}</Badge>
+                <div className="flex gap-1 items-center">
+                  <Badge variant="outline">{t.sexo}</Badge>
+                  {t.status !== "activo" && <Badge variant="secondary">{t.status}</Badge>}
+                </div>
               </div>
               <p className="text-sm text-muted-foreground">{t.oposiciones?.nombre} · {t.simulacro_template_marks?.length ?? 0} pruebas</p>
             </CardHeader>
-            <CardContent>
-              <Button size="sm" onClick={() => startRun(t)}>Registrar resultado</Button>
+            <CardContent className="flex gap-2">
+              <Button size="sm" onClick={() => startRun(t)} disabled={t.status !== "activo"}>Registrar resultado</Button>
+              {isCoach && t.status === "activo" && (
+                <Button size="sm" variant="outline" onClick={() => archiveTpl(t.id)}><Archive className="h-3 w-3" /></Button>
+              )}
             </CardContent>
           </Card>
         ))}
-        {templates.length === 0 && <p className="col-span-full text-center text-muted-foreground py-8">No hay plantillas todavía.</p>}
+        {visibleTemplates.length === 0 && <p className="col-span-full text-center text-muted-foreground py-8">No hay plantillas todavía.</p>}
       </div>
 
       <div className="mt-8">
         <h2 className="brand-title text-2xl mb-3">Histórico</h2>
         <div className="space-y-2">
-          {executions.map((e) => (
-            <Card key={e.id}>
-              <CardContent className="py-3 flex justify-between items-center">
-                <div>
-                  <div className="font-medium">{e.simulacro_templates?.nombre}</div>
-                  <div className="text-xs text-muted-foreground">{e.simulacro_templates?.oposiciones?.nombre} · {new Date(e.fecha).toLocaleString("es-ES")}</div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {executions.map((e) => {
+            const author = profilesMap[e.user_id];
+            const isOpen = expanded === e.id;
+            const det = executionResults[e.id] ?? [];
+            return (
+              <Card key={e.id}>
+                <CardContent className="py-3">
+                  <button className="w-full flex justify-between items-center" onClick={() => toggleExpand(e.id)}>
+                    <div className="text-left">
+                      <div className="font-medium">{e.simulacro_templates?.nombre}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {e.simulacro_templates?.oposiciones?.nombre} · {new Date(e.fecha).toLocaleString("es-ES")}
+                        {isCoach && author && <span className="ml-2">· {author.nombre} {author.apellidos}</span>}
+                      </div>
+                    </div>
+                    {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {isOpen && (
+                    <div className="mt-3 pt-3 border-t space-y-1 text-sm">
+                      {det.length === 0 && <p className="text-muted-foreground">Sin resultados.</p>}
+                      {det.map((r) => (
+                        <div key={r.id} className="flex justify-between">
+                          <span>{r.marks?.nombre}</span>
+                          <span className="font-mono">{r.valor_numerico ?? r.valor_texto ?? "—"} {r.marks?.unidad}</span>
+                        </div>
+                      ))}
+                      {e.observaciones && <p className="text-xs text-muted-foreground pt-2 italic">{e.observaciones}</p>}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
           {executions.length === 0 && <p className="text-muted-foreground text-center py-4">Sin ejecuciones.</p>}
         </div>
       </div>

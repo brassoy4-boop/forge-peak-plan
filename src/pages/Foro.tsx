@@ -11,9 +11,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { MessageSquare, Plus } from "lucide-react";
 import { toast } from "sonner";
 
+interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
+
 export default function Foro() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<any[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>({});
   const [selected, setSelected] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -21,14 +24,44 @@ export default function Foro() {
   const [reply, setReply] = useState("");
 
   const loadThreads = async () => {
-    const { data } = await supabase.from("forum_threads").select("*, profiles!forum_threads_created_by_fkey(nombre, apellidos)").order("updated_at", { ascending: false });
-    setThreads(data ?? []);
+    const { data } = await supabase.from("forum_threads").select("*").order("updated_at", { ascending: false });
+    const list = data ?? [];
+    setThreads(list);
+    const ids = Array.from(new Set(list.map((t: any) => t.created_by)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
+      const m: Record<string, ProfileLite> = {};
+      (profs ?? []).forEach((p: any) => { m[p.user_id] = p; });
+      setProfilesMap((prev) => ({ ...prev, ...m }));
+    }
   };
+
+  const loadMessages = async (threadId: string) => {
+    const { data } = await supabase.from("forum_messages").select("*").eq("thread_id", threadId).order("created_at");
+    const list = data ?? [];
+    setMessages(list);
+    const ids = Array.from(new Set(list.map((m: any) => m.user_id)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
+      const m: Record<string, ProfileLite> = {};
+      (profs ?? []).forEach((p: any) => { m[p.user_id] = p; });
+      setProfilesMap((prev) => ({ ...prev, ...m }));
+    }
+  };
+
   useEffect(() => { loadThreads(); }, []);
+
   useEffect(() => {
     if (!selected) return;
-    supabase.from("forum_messages").select("*, profiles!forum_messages_user_id_fkey(nombre, apellidos)").eq("thread_id", selected.id).order("created_at")
-      .then(({ data }) => setMessages(data ?? []));
+    loadMessages(selected.id);
+    const ch = supabase
+      .channel(`fm-${selected.id}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "forum_messages", filter: `thread_id=eq.${selected.id}` },
+        () => loadMessages(selected.id),
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
   }, [selected]);
 
   const createThread = async () => {
@@ -41,11 +74,11 @@ export default function Foro() {
 
   const sendReply = async () => {
     if (!user || !selected || !reply.trim()) return;
-    const { error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: reply });
-    if (error) return toast.error(error.message);
+    const content = reply;
     setReply("");
-    const { data } = await supabase.from("forum_messages").select("*, profiles!forum_messages_user_id_fkey(nombre, apellidos)").eq("thread_id", selected.id).order("created_at");
-    setMessages(data ?? []);
+    const { error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: content });
+    if (error) { toast.error(error.message); setReply(content); return; }
+    await supabase.from("forum_threads").update({ updated_at: new Date().toISOString() }).eq("id", selected.id);
   };
 
   return (
@@ -67,17 +100,20 @@ export default function Foro() {
       />
       {!selected ? (
         <div className="space-y-2">
-          {threads.map(t => (
-            <Card key={t.id} className="cursor-pointer hover:border-primary" onClick={() => setSelected(t)}>
-              <CardContent className="py-3 flex items-center gap-3">
-                <MessageSquare className="h-5 w-5 text-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium truncate">{t.titulo}</div>
-                  <div className="text-xs text-muted-foreground">{t.profiles?.nombre} {t.profiles?.apellidos} · {new Date(t.updated_at).toLocaleDateString("es-ES")}</div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {threads.map(t => {
+            const author = profilesMap[t.created_by];
+            return (
+              <Card key={t.id} className="cursor-pointer hover:border-primary" onClick={() => setSelected(t)}>
+                <CardContent className="py-3 flex items-center gap-3">
+                  <MessageSquare className="h-5 w-5 text-primary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{t.titulo}</div>
+                    <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(t.updated_at).toLocaleDateString("es-ES")}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
           {threads.length === 0 && <p className="text-center text-muted-foreground py-8">Sin hilos todavía.</p>}
         </div>
       ) : (
@@ -86,12 +122,15 @@ export default function Foro() {
           <Card>
             <CardHeader><CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle></CardHeader>
             <CardContent className="space-y-3">
-              {messages.map(m => (
-                <div key={m.id} className="border-l-2 border-primary pl-3 py-1">
-                  <div className="text-xs text-muted-foreground">{m.profiles?.nombre} {m.profiles?.apellidos} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
-                  <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
-                </div>
-              ))}
+              {messages.map(m => {
+                const author = profilesMap[m.user_id];
+                return (
+                  <div key={m.id} className="border-l-2 border-primary pl-3 py-1">
+                    <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
+                    <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
+                  </div>
+                );
+              })}
               <div className="space-y-2 pt-3 border-t">
                 <Textarea placeholder="Escribe una respuesta..." value={reply} onChange={(e) => setReply(e.target.value)} />
                 <Button onClick={sendReply} disabled={!reply.trim()}>Responder</Button>
