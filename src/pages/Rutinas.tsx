@@ -121,14 +121,20 @@ export default function Rutinas() {
       {!selected ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleRoutines.map((r) => (
-            <Card key={r.id} className="cursor-pointer hover:border-primary" onClick={() => { setSelected(r); setActiveDay(1); }}>
+            <Card key={r.id} className="hover:border-primary">
               <CardHeader>
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="brand-title text-xl">{r.nombre}</CardTitle>
+                  <CardTitle className="brand-title text-xl cursor-pointer flex-1" onClick={() => { setSelected(r); setActiveDay(1); }}>{r.nombre}</CardTitle>
                   <Badge><Calendar className="mr-1 h-3 w-3" />{r.num_dias} días</Badge>
                 </div>
                 {r.descripcion && <CardDescription>{r.descripcion}</CardDescription>}
               </CardHeader>
+              {isCoach && (
+                <CardContent className="flex gap-2 pt-0">
+                  <Button size="sm" variant="outline" onClick={() => { setSelected(r); setActiveDay(1); }}>Editar</Button>
+                  <Button size="sm" variant="ghost" onClick={() => duplicateRoutine(r)}><Copy className="h-3 w-3 mr-1" /> Duplicar</Button>
+                </CardContent>
+              )}
             </Card>
           ))}
           {visibleRoutines.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">No hay rutinas.</p>}
@@ -163,6 +169,11 @@ export default function Rutinas() {
                             <div className="font-medium">{ex?.nombre}</div>
                             <div className="text-xs text-muted-foreground">{re.series} series · {re.repeticiones} reps · descanso {re.descanso}</div>
                           </div>
+                          {isCoach && (
+                            <Button size="icon" variant="ghost" onClick={() => removeExercise(re.id)} title="Eliminar">
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       );
                     })}
