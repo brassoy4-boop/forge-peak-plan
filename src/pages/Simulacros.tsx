@@ -46,9 +46,9 @@ export default function Simulacros() {
       const { data: u } = await supabase.from("profiles").select("user_id, nombre, apellidos").order("nombre");
       setUsers(u ?? []);
     }
-    const ids = Array.from(new Set(execs.map((x: any) => x.user_id)));
+    const ids = Array.from(new Set(execs.map((x: any) => x.user_id as string)));
     if (ids.length) {
-      const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
+      const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids as string[]);
       const m2: Record<string, ProfileLite> = {};
       (profs ?? []).forEach((p: any) => { m2[p.user_id] = p; });
       setProfilesMap(m2);

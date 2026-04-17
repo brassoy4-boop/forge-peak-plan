@@ -40,7 +40,7 @@ export default function Ejercicios() {
     toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
   };
 
-  const openExDialog = (ex?: any) => {
+  const openExerciseDialog = (ex?: any) => {
     if (ex) {
       setEditing(ex);
       setExForm({
@@ -64,7 +64,7 @@ export default function Ejercicios() {
       if (error) return toast.error(error.message);
       toast.success("Ejercicio creado");
     }
-    _setOpenEx(false); setEditing(null);
+    setOpenEx(false); setEditing(null);
     setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
     load();
   };
@@ -90,8 +90,8 @@ export default function Ejercicios() {
                 <DialogFooter><Button onClick={saveCat}>Guardar</Button></DialogFooter>
               </DialogContent>
             </Dialog>
-            <Dialog open={openEx} onOpenChange={_setOpenEx}>
-              <DialogTrigger asChild><Button onClick={() => openEx()}><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
+            <Dialog open={openEx} onOpenChange={setOpenEx}>
+              <DialogTrigger asChild><Button onClick={() => openExerciseDialog()}><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>{editing ? "Editar ejercicio" : "Nuevo ejercicio"}</DialogTitle></DialogHeader>
                 <div className="space-y-3">
@@ -138,7 +138,7 @@ export default function Ejercicios() {
             </CardHeader>
             {isCoach && (
               <CardContent className="flex gap-2 pt-0">
-                <Button size="sm" variant="outline" onClick={() => openEx(ex)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>
+                <Button size="sm" variant="outline" onClick={() => openExerciseDialog(ex)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>
                 <Button size="sm" variant="outline" onClick={() => toggleStatus(ex)}>
                   {ex.status === "activo" ? <><Archive className="h-3 w-3 mr-1" /> Archivar</> : <><Power className="h-3 w-3 mr-1" /> Reactivar</>}
                 </Button>
