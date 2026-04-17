@@ -6,54 +6,106 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Save, Calculator } from "lucide-react";
+import { Save, Calculator, Loader2 } from "lucide-react";
 
 /**
  * Carga masiva tipo Excel
- * - Selección de marcas
+ * - Selección de marcas y usuarios asignados
  * - Grid editable (filas = usuarios, columnas = marcas)
- * - Cálculos automáticos: VAM, VO2max, ritmo
+ * - Cálculos automáticos: VAM, VO2max, ritmos, recuperación cardíaca
  * - Guardado masivo en mark_records (cada usuario sólo verá sus filas por RLS)
+ * - Comparativa entre dos imports previos
  */
 export default function CargaMasiva() {
-  const { user } = useAuth();
+  const { user, primaryRole } = useAuth();
+  const isSuper = primaryRole === "superadmin";
   const [profiles, setProfiles] = useState<any[]>([]);
   const [marks, setMarks] = useState<any[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [selectedMarks, setSelectedMarks] = useState<Set<string>>(new Set());
   const [grid, setGrid] = useState<Record<string, Record<string, string>>>({});
-  const [testLabel, setTestLabel] = useState("Test 1");
+  // Datos cardíacos para recuperación: FC al final + FC tras 1 minuto (no son marcas, sino columnas auxiliares)
+  const [hr, setHr] = useState<Record<string, { final?: string; min1?: string }>>({});
+  const [testLabel, setTestLabel] = useState("Test " + new Date().toLocaleDateString("es-ES"));
+  const [saving, setSaving] = useState(false);
+  const [imports, setImports] = useState<any[]>([]);
+  const [cmpA, setCmpA] = useState<string>("");
+  const [cmpB, setCmpB] = useState<string>("");
+
+  const loadProfiles = async () => {
+    if (!user) return;
+    let q = supabase.from("profiles").select("user_id, nombre, apellidos");
+    if (!isSuper) {
+      // Solo usuarios asignados a este coach
+      const { data: ca } = await supabase.from("coach_assignments").select("user_id").eq("coach_id", user.id);
+      const ids = (ca ?? []).map(c => c.user_id);
+      if (ids.length === 0) {
+        setProfiles([]);
+        return;
+      }
+      q = q.in("user_id", ids);
+    }
+    const { data } = await q.order("nombre");
+    setProfiles(data ?? []);
+  };
+
+  const loadImports = async () => {
+    const { data } = await supabase.from("bulk_imports").select("*").order("created_at", { ascending: false }).limit(20);
+    setImports(data ?? []);
+  };
 
   useEffect(() => {
-    Promise.all([
-      supabase.from("profiles").select("user_id, nombre, apellidos"),
-      supabase.from("marks").select("*").eq("status", "activo").order("nombre"),
-    ]).then(([p, m]) => {
-      setProfiles(p.data ?? []); setMarks(m.data ?? []);
-    });
-  }, []);
+    loadProfiles();
+    loadImports();
+    supabase.from("marks").select("*").eq("status", "activo").order("nombre").then(({ data }) => setMarks(data ?? []));
+  }, [user, primaryRole]);
 
   const setCell = (userId: string, markId: string, value: string) => {
     setGrid(prev => ({ ...prev, [userId]: { ...(prev[userId] ?? {}), [markId]: value } }));
   };
 
-  // Cálculos: VAM (km/h) desde 1000m (tiempo en seg), VO2max ≈ VAM * 3.5, ritmo (min/km)
-  const compute = (userRow: Record<string, string>) => {
+  // Cálculos: VAM (km/h) desde 1000m (tiempo en seg), VO2max ≈ VAM * 3.5, ritmo (min/km), recuperación = HRfinal - HR1min
+  const compute = (userId: string) => {
+    const userRow = grid[userId] ?? {};
     const m1000 = marks.find(m => m.nombre.toLowerCase().includes("1000"));
-    if (!m1000) return null;
-    const t = Number(userRow[m1000.id]);
-    if (!t || t <= 0) return null;
-    const vam = (1000 / t) * 3.6; // km/h
-    const vo2 = vam * 3.5;
-    const ritmo = t / 60; // min/km (ya 1km)
-    return { vam: vam.toFixed(2), vo2: vo2.toFixed(1), ritmo: ritmo.toFixed(2) };
+    let vam: string | null = null, vo2: string | null = null, ritmo: string | null = null;
+    if (m1000) {
+      const t = Number(userRow[m1000.id]);
+      if (t && t > 0) {
+        const v = (1000 / t) * 3.6;
+        vam = v.toFixed(2);
+        vo2 = (v * 3.5).toFixed(1);
+        ritmo = (t / 60).toFixed(2);
+      }
+    }
+    const fcFinal = Number(hr[userId]?.final);
+    const fcMin1 = Number(hr[userId]?.min1);
+    const recup = fcFinal && fcMin1 ? (fcFinal - fcMin1).toString() : null;
+    return { vam, vo2, ritmo, recup };
   };
 
-  const usuariosVisibles = useMemo(() => profiles.filter(p => selectedUsers.size === 0 || selectedUsers.has(p.user_id)), [profiles, selectedUsers]);
+  const usuariosVisibles = useMemo(
+    () => profiles.filter(p => selectedUsers.size === 0 || selectedUsers.has(p.user_id)),
+    [profiles, selectedUsers],
+  );
   const marcasVisibles = useMemo(() => marks.filter(m => selectedMarks.has(m.id)), [marks, selectedMarks]);
+
+  // Mejor VAM del grupo
+  const mejorVam = useMemo(() => {
+    let best: { name: string; vam: number } | null = null;
+    usuariosVisibles.forEach(p => {
+      const c = compute(p.user_id);
+      if (c.vam) {
+        const v = Number(c.vam);
+        if (!best || v > best.vam) best = { name: `${p.nombre} ${p.apellidos}`, vam: v };
+      }
+    });
+    return best;
+  }, [usuariosVisibles, grid, hr, marks]);
 
   const saveAll = async () => {
     if (!user) return;
@@ -72,12 +124,44 @@ export default function CargaMasiva() {
       }
     }
     if (!rows.length) return toast.error("Nada que guardar");
+    setSaving(true);
     const { error } = await supabase.from("mark_records").insert(rows);
-    if (error) return toast.error(error.message);
-    await supabase.from("bulk_imports").insert({ coach_id: user.id, nombre: testLabel, test_label: testLabel, data: { rows } as any });
+    if (error) {
+      setSaving(false);
+      return toast.error(error.message);
+    }
+    // Snapshot del grid (incluye HR y métricas calculadas) para comparativas
+    const snapshot = usuariosVisibles.map(p => ({
+      user_id: p.user_id,
+      nombre: `${p.nombre} ${p.apellidos}`,
+      values: grid[p.user_id] ?? {},
+      hr: hr[p.user_id] ?? {},
+      metrics: compute(p.user_id),
+    }));
+    await supabase.from("bulk_imports").insert({
+      coach_id: user.id, nombre: testLabel, test_label: testLabel,
+      data: { rows, snapshot } as any,
+    });
+    setSaving(false);
     toast.success(`${rows.length} registros guardados`);
-    setGrid({});
+    setGrid({}); setHr({});
+    loadImports();
   };
+
+  // Comparativa
+  const cmpData = useMemo(() => {
+    const a = imports.find(i => i.id === cmpA);
+    const b = imports.find(i => i.id === cmpB);
+    if (!a || !b) return [];
+    const aSnap: any[] = (a.data?.snapshot ?? []);
+    const bSnap: any[] = (b.data?.snapshot ?? []);
+    const map: Record<string, any> = {};
+    aSnap.forEach((s: any) => { map[s.user_id] = { nombre: s.nombre, vamA: s.metrics?.vam, vamB: null }; });
+    bSnap.forEach((s: any) => {
+      map[s.user_id] = { nombre: s.nombre, vamA: map[s.user_id]?.vamA ?? null, vamB: s.metrics?.vam };
+    });
+    return Object.values(map);
+  }, [imports, cmpA, cmpB]);
 
   return (
     <div>
@@ -87,6 +171,7 @@ export default function CargaMasiva() {
           <TabsTrigger value="config">Configuración</TabsTrigger>
           <TabsTrigger value="grid">Grid de captura</TabsTrigger>
           <TabsTrigger value="metrics">Métricas calculadas</TabsTrigger>
+          <TabsTrigger value="cmp">Comparativa</TabsTrigger>
           <TabsTrigger value="ref">Referencia</TabsTrigger>
         </TabsList>
 
@@ -99,8 +184,12 @@ export default function CargaMasiva() {
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>2. Selecciona usuarios</CardTitle><CardDescription>(vacío = todos)</CardDescription></CardHeader>
+            <CardHeader>
+              <CardTitle>2. Selecciona usuarios</CardTitle>
+              <CardDescription>(vacío = todos los visibles{!isSuper ? "; solo se muestran tus asignados" : ""})</CardDescription>
+            </CardHeader>
             <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {profiles.length === 0 && <p className="text-sm text-muted-foreground col-span-full">No tienes usuarios asignados todavía.</p>}
               {profiles.map(p => (
                 <label key={p.user_id} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={selectedUsers.has(p.user_id)} onChange={(e) => {
@@ -135,18 +224,24 @@ export default function CargaMasiva() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Grid · {testLabel}</CardTitle>
-                <Button onClick={saveAll}><Save className="mr-2 h-4 w-4" /> Guardar todo</Button>
+                <Button onClick={saveAll} disabled={saving}>
+                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                  Guardar todo
+                </Button>
               </div>
+              <CardDescription>Las columnas FC final y FC 1' permiten calcular la recuperación cardíaca.</CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              {marcasVisibles.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Selecciona al menos una marca en la pestaña Configuración.</p>
+              {marcasVisibles.length === 0 || usuariosVisibles.length === 0 ? (
+                <p className="text-muted-foreground text-sm">Selecciona al menos un usuario y una marca en la pestaña Configuración.</p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="sticky left-0 bg-card">Usuario</TableHead>
                       {marcasVisibles.map(m => <TableHead key={m.id}>{m.nombre}<br /><span className="text-[10px] font-normal">({m.unidad})</span></TableHead>)}
+                      <TableHead>FC final<br /><span className="text-[10px] font-normal">(ppm)</span></TableHead>
+                      <TableHead>FC 1'<br /><span className="text-[10px] font-normal">(ppm)</span></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -158,6 +253,12 @@ export default function CargaMasiva() {
                             <Input className="w-24 h-8" value={grid[p.user_id]?.[m.id] ?? ""} onChange={(e) => setCell(p.user_id, m.id, e.target.value)} />
                           </TableCell>
                         ))}
+                        <TableCell>
+                          <Input className="w-20 h-8" value={hr[p.user_id]?.final ?? ""} onChange={(e) => setHr({ ...hr, [p.user_id]: { ...(hr[p.user_id] ?? {}), final: e.target.value } })} />
+                        </TableCell>
+                        <TableCell>
+                          <Input className="w-20 h-8" value={hr[p.user_id]?.min1 ?? ""} onChange={(e) => setHr({ ...hr, [p.user_id]: { ...(hr[p.user_id] ?? {}), min1: e.target.value } })} />
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -169,25 +270,86 @@ export default function CargaMasiva() {
 
         <TabsContent value="metrics">
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-primary" /> Métricas automáticas</CardTitle>
-              <CardDescription>Calculadas a partir del 1000m introducido en el grid.</CardDescription></CardHeader>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Calculator className="h-5 w-5 text-primary" /> Métricas automáticas</CardTitle>
+              <CardDescription>
+                Calculadas en vivo a partir del 1000m y la frecuencia cardíaca.
+                {mejorVam && <span className="ml-2 text-primary font-medium">Mejor VAM: {mejorVam.vam.toFixed(2)} km/h ({mejorVam.name})</span>}
+              </CardDescription>
+            </CardHeader>
             <CardContent className="overflow-x-auto">
               <Table>
-                <TableHeader><TableRow><TableHead>Usuario</TableHead><TableHead>VAM (km/h)</TableHead><TableHead>VO2max</TableHead><TableHead>Ritmo (min/km)</TableHead></TableRow></TableHeader>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Usuario</TableHead>
+                    <TableHead>VAM (km/h)</TableHead>
+                    <TableHead>VO2max</TableHead>
+                    <TableHead>Ritmo (min/km)</TableHead>
+                    <TableHead>Recuperación cardíaca (ppm)</TableHead>
+                  </TableRow>
+                </TableHeader>
                 <TableBody>
                   {usuariosVisibles.map(p => {
-                    const c = compute(grid[p.user_id] ?? {});
+                    const c = compute(p.user_id);
                     return (
                       <TableRow key={p.user_id}>
                         <TableCell>{p.nombre} {p.apellidos}</TableCell>
-                        <TableCell>{c?.vam ?? "—"}</TableCell>
-                        <TableCell>{c?.vo2 ?? "—"}</TableCell>
-                        <TableCell>{c?.ritmo ?? "—"}</TableCell>
+                        <TableCell className="font-mono">{c.vam ?? "—"}</TableCell>
+                        <TableCell className="font-mono">{c.vo2 ?? "—"}</TableCell>
+                        <TableCell className="font-mono">{c.ritmo ?? "—"}</TableCell>
+                        <TableCell className="font-mono">{c.recup ?? "—"}</TableCell>
                       </TableRow>
                     );
                   })}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="cmp">
+          <Card>
+            <CardHeader>
+              <CardTitle>Comparativa entre tests</CardTitle>
+              <CardDescription>Compara VAM entre dos cargas guardadas.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Test A</Label>
+                  <Select value={cmpA} onValueChange={setCmpA}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>{imports.map(i => <SelectItem key={i.id} value={i.id}>{i.nombre} · {new Date(i.created_at).toLocaleDateString("es-ES")}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Test B</Label>
+                  <Select value={cmpB} onValueChange={setCmpB}>
+                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>{imports.map(i => <SelectItem key={i.id} value={i.id}>{i.nombre} · {new Date(i.created_at).toLocaleDateString("es-ES")}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {cmpData.length > 0 && (
+                <Table>
+                  <TableHeader><TableRow><TableHead>Usuario</TableHead><TableHead>VAM A</TableHead><TableHead>VAM B</TableHead><TableHead>Δ</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {cmpData.map((row: any) => {
+                      const a = Number(row.vamA), b = Number(row.vamB);
+                      const delta = a && b ? (b - a).toFixed(2) : "—";
+                      const cls = a && b ? (b > a ? "text-primary" : "text-muted-foreground") : "";
+                      return (
+                        <TableRow key={row.nombre}>
+                          <TableCell>{row.nombre}</TableCell>
+                          <TableCell className="font-mono">{row.vamA ?? "—"}</TableCell>
+                          <TableCell className="font-mono">{row.vamB ?? "—"}</TableCell>
+                          <TableCell className={`font-mono ${cls}`}>{delta}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -199,6 +361,7 @@ export default function CargaMasiva() {
               <p><strong>VAM (Velocidad Aeróbica Máxima):</strong> velocidad mínima a la que se alcanza el VO2max. Aproximada como (distancia/tiempo)·3,6 a partir del 1000m.</p>
               <p><strong>VO2max:</strong> consumo máximo de oxígeno. Aproximación: VAM · 3,5.</p>
               <p><strong>Ritmo:</strong> minutos por kilómetro a la velocidad del test.</p>
+              <p><strong>Recuperación cardíaca:</strong> diferencia entre la FC al finalizar el esfuerzo y la FC tras 1 minuto de recuperación. Valores &gt; 30 ppm son indicativos de buena condición.</p>
               <p className="text-muted-foreground text-xs pt-2">Estas estimaciones son orientativas; usa pruebas específicas para cálculos precisos.</p>
             </CardContent>
           </Card>
