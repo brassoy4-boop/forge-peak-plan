@@ -1111,6 +1111,9 @@ export type Database = {
       }
       is_coach_or_admin: { Args: { _user_id: string }; Returns: boolean }
       is_superadmin: { Args: { _user_id: string }; Returns: boolean }
+      promote_to_superadmin: { Args: never; Returns: boolean }
+      set_access_pin: { Args: { _pin: string }; Returns: boolean }
+      superadmin_exists: { Args: never; Returns: boolean }
       verify_access_pin: { Args: { _pin: string }; Returns: boolean }
     }
     Enums: {
