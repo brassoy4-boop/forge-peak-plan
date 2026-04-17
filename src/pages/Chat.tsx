@@ -92,6 +92,16 @@ export default function Chat() {
     const { error } = await supabase.from("private_messages").insert({ conversation_id: selected.id, sender_id: user.id, contenido: content });
     if (error) { toast.error(error.message); setText(content); return; }
     await supabase.from("private_conversations").update({ last_message_at: new Date().toISOString() }).eq("id", selected.id);
+    // Notificar al otro participante
+    const otherId = selected.user_id === user.id ? selected.coach_id : selected.user_id;
+    if (otherId) {
+      await supabase.from("notifications").insert({
+        user_id: otherId, tipo: "chat",
+        titulo: "Nuevo mensaje privado",
+        contenido: content.slice(0, 80),
+        link: "/app/chat",
+      });
+    }
   };
 
   return (
