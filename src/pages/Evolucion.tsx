@@ -44,9 +44,24 @@ export default function Evolucion() {
     : null;
   const last = records.length ? Number(records[records.length - 1].valor_numerico) : null;
 
+  const exportCsv = () => {
+    if (!records.length) return;
+    const header = "Fecha,Valor,Unidad,Origen,Observaciones\n";
+    const rows = records.map(r => `${new Date(r.fecha).toISOString()},${r.valor_numerico ?? r.valor_texto ?? ""},${r.unidad ?? mark?.unidad ?? ""},${r.origen ?? ""},"${(r.observaciones ?? "").replace(/"/g, '""')}"`).join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `evolucion-${mark?.nombre ?? "marca"}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div>
-      <PageHeader title={isCoach ? "Analítica" : "Mi evolución"} description="Evolución de marcas en el tiempo." />
+      <PageHeader
+        title={isCoach ? "Analítica" : "Mi evolución"}
+        description="Evolución de marcas en el tiempo."
+        actions={<Button variant="outline" onClick={exportCsv} disabled={!records.length}><Download className="mr-2 h-4 w-4" /> Exportar CSV</Button>}
+      />
       <Card className="mb-6">
         <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
           {isCoach && (
