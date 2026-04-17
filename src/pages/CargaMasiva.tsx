@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Save, Calculator, Loader2 } from "lucide-react";
+import { Save, Calculator, Loader2, FileSpreadsheet, Download } from "lucide-react";
+import * as XLSX from "xlsx";
+import { isValidTime, isValidNumber } from "@/lib/validators";
 
 /**
  * Carga masiva tipo Excel
@@ -170,6 +172,7 @@ export default function CargaMasiva() {
         <TabsList>
           <TabsTrigger value="config">Configuración</TabsTrigger>
           <TabsTrigger value="grid">Grid de captura</TabsTrigger>
+          <TabsTrigger value="import">Importar Excel/CSV</TabsTrigger>
           <TabsTrigger value="metrics">Métricas calculadas</TabsTrigger>
           <TabsTrigger value="cmp">Comparativa</TabsTrigger>
           <TabsTrigger value="ref">Referencia</TabsTrigger>
