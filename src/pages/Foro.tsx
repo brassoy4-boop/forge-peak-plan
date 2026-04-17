@@ -32,7 +32,11 @@ export default function Foro() {
   };
 
   const loadThreads = async () => {
-    const { data } = await supabase.from("forum_threads").select("*").order("updated_at", { ascending: false });
+    let q = supabase.from("forum_threads").select("*, oposiciones(nombre)").order("updated_at", { ascending: false });
+    if (filterOpo !== "__all__") {
+      q = filterOpo === "__none__" ? q.is("oposicion_id", null) : q.eq("oposicion_id", filterOpo);
+    }
+    const { data } = await q;
     const list = data ?? [];
     setThreads(list);
     const ids = Array.from(new Set(list.map((t: any) => t.created_by)));
@@ -57,7 +61,8 @@ export default function Foro() {
     }
   };
 
-  useEffect(() => { loadThreads(); }, []);
+  useEffect(() => { loadOpos(); }, []);
+  useEffect(() => { loadThreads(); }, [filterOpo]);
 
   useEffect(() => {
     if (!selected) return;
@@ -74,10 +79,14 @@ export default function Foro() {
 
   const createThread = async () => {
     if (!user || !form.titulo) return;
-    const { data, error } = await supabase.from("forum_threads").insert({ titulo: form.titulo, created_by: user.id }).select().single();
+    const payload: any = { titulo: form.titulo, created_by: user.id };
+    if (form.oposicion_id !== "__none__") payload.oposicion_id = form.oposicion_id;
+    const { data, error } = await supabase.from("forum_threads").insert(payload).select().single();
     if (error) return toast.error(error.message);
     if (form.contenido) await supabase.from("forum_messages").insert({ thread_id: data.id, user_id: user.id, contenido: form.contenido });
-    toast.success("Hilo creado"); setOpen(false); setForm({ titulo: "", contenido: "" }); loadThreads();
+    toast.success("Hilo creado"); setOpen(false);
+    setForm({ titulo: "", contenido: "", oposicion_id: "__none__" });
+    loadThreads();
   };
 
   const sendReply = async () => {
