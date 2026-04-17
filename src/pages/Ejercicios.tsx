@@ -8,10 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Image as ImageIcon } from "lucide-react";
+import { Plus, Image as ImageIcon, Pencil, Archive, Power } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Ejercicios() {
@@ -19,8 +18,10 @@ export default function Ejercicios() {
   const isCoach = primaryRole === "entrenador" || primaryRole === "superadmin";
   const [cats, setCats] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
+  const [filterCat, setFilterCat] = useState<string>("__all__");
   const [openCat, setOpenCat] = useState(false);
   const [openEx, setOpenEx] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
   const [catForm, setCatForm] = useState({ nombre: "" });
   const [exForm, setExForm] = useState({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
 
@@ -38,14 +39,45 @@ export default function Ejercicios() {
     if (error) return toast.error(error.message);
     toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
   };
+
+  const openEx = (ex?: any) => {
+    if (ex) {
+      setEditing(ex);
+      setExForm({
+        nombre: ex.nombre, category_id: ex.category_id ?? "",
+        descripcion: ex.descripcion ?? "", imagen_url: ex.imagen_url ?? "", instrucciones: ex.instrucciones ?? "",
+      });
+    } else {
+      setEditing(null);
+      setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
+    }
+    setOpenEx(true);
+  };
+  const _setOpenEx = setOpenEx;
+
   const saveEx = async () => {
     const payload: any = { ...exForm, category_id: exForm.category_id || null };
-    const { error } = await supabase.from("exercises").insert(payload);
-    if (error) return toast.error(error.message);
-    toast.success("Ejercicio creado"); setOpenEx(false);
+    if (editing) {
+      const { error } = await supabase.from("exercises").update(payload).eq("id", editing.id);
+      if (error) return toast.error(error.message);
+      toast.success("Ejercicio actualizado");
+    } else {
+      const { error } = await supabase.from("exercises").insert(payload);
+      if (error) return toast.error(error.message);
+      toast.success("Ejercicio creado");
+    }
+    _setOpenEx(false); setEditing(null);
     setExForm({ nombre: "", category_id: "", descripcion: "", imagen_url: "", instrucciones: "" });
     load();
   };
+
+  const toggleStatus = async (ex: any) => {
+    const next = ex.status === "activo" ? "archivado" : "activo";
+    await supabase.from("exercises").update({ status: next }).eq("id", ex.id);
+    load();
+  };
+
+  const visible = filterCat === "__all__" ? items : items.filter(i => i.category_id === filterCat);
 
   return (
     <div>
@@ -60,10 +92,10 @@ export default function Ejercicios() {
                 <DialogFooter><Button onClick={saveCat}>Guardar</Button></DialogFooter>
               </DialogContent>
             </Dialog>
-            <Dialog open={openEx} onOpenChange={setOpenEx}>
-              <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
+            <Dialog open={openEx} onOpenChange={_setOpenEx}>
+              <DialogTrigger asChild><Button onClick={() => openEx()}><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
               <DialogContent>
-                <DialogHeader><DialogTitle>Nuevo ejercicio</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle>{editing ? "Editar ejercicio" : "Nuevo ejercicio"}</DialogTitle></DialogHeader>
                 <div className="space-y-3">
                   <div className="space-y-2"><Label>Nombre</Label><Input value={exForm.nombre} onChange={(e) => setExForm({ ...exForm, nombre: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Categoría</Label>
@@ -82,8 +114,19 @@ export default function Ejercicios() {
           </div>
         )}
       />
+
+      <div className="mb-4 max-w-xs">
+        <Select value={filterCat} onValueChange={setFilterCat}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todas las categorías</SelectItem>
+            {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.map((ex) => (
+        {visible.map((ex) => (
           <Card key={ex.id} className="overflow-hidden">
             <div className="aspect-video bg-muted flex items-center justify-center">
               {ex.imagen_url ? <img src={ex.imagen_url} alt={ex.nombre} className="w-full h-full object-cover" /> : <ImageIcon className="h-10 w-10 text-muted-foreground" />}
@@ -95,9 +138,17 @@ export default function Ejercicios() {
               </div>
               {ex.descripcion && <p className="text-sm text-muted-foreground line-clamp-2">{ex.descripcion}</p>}
             </CardHeader>
+            {isCoach && (
+              <CardContent className="flex gap-2 pt-0">
+                <Button size="sm" variant="outline" onClick={() => openEx(ex)}><Pencil className="h-3 w-3 mr-1" /> Editar</Button>
+                <Button size="sm" variant="outline" onClick={() => toggleStatus(ex)}>
+                  {ex.status === "activo" ? <><Archive className="h-3 w-3 mr-1" /> Archivar</> : <><Power className="h-3 w-3 mr-1" /> Reactivar</>}
+                </Button>
+              </CardContent>
+            )}
           </Card>
         ))}
-        {items.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">Sin ejercicios todavía.</p>}
+        {visible.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">Sin ejercicios.</p>}
       </div>
     </div>
   );

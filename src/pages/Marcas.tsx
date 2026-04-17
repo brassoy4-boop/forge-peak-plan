@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus } from "lucide-react";
+import { Plus, Pencil, Archive, Power } from "lucide-react";
 import { toast } from "sonner";
 
 interface MarkCategory { id: string; nombre: string; orden: number; status: string; }
@@ -18,6 +18,8 @@ interface Mark {
   id: string; category_id: string | null; nombre: string; value_type: string; unidad: string | null;
   mejor_mayor: boolean; status: string;
 }
+
+const VALUE_TYPES = ["tiempo", "distancia", "repeticiones", "peso", "puntuacion", "booleano", "texto"];
 
 export default function Marcas() {
   const { primaryRole } = useAuth();
@@ -27,6 +29,7 @@ export default function Marcas() {
   const [openCat, setOpenCat] = useState(false);
   const [openMark, setOpenMark] = useState(false);
   const [catForm, setCatForm] = useState({ nombre: "" });
+  const [editingMark, setEditingMark] = useState<Mark | null>(null);
   const [markForm, setMarkForm] = useState({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
 
   const load = async () => {
@@ -45,13 +48,41 @@ export default function Marcas() {
     if (error) return toast.error(error.message);
     toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
   };
+
+  const openMarkDialog = (m?: Mark) => {
+    if (m) {
+      setEditingMark(m);
+      setMarkForm({
+        nombre: m.nombre, category_id: m.category_id ?? "",
+        value_type: m.value_type, unidad: m.unidad ?? "", mejor_mayor: m.mejor_mayor,
+      });
+    } else {
+      setEditingMark(null);
+      setMarkForm({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
+    }
+    setOpenMark(true);
+  };
+
   const saveMark = async () => {
     if (!markForm.nombre.trim()) return;
     const payload: any = { ...markForm, category_id: markForm.category_id || null };
-    const { error } = await supabase.from("marks").insert(payload);
-    if (error) return toast.error(error.message);
-    toast.success("Marca creada"); setOpenMark(false);
+    if (editingMark) {
+      const { error } = await supabase.from("marks").update(payload).eq("id", editingMark.id);
+      if (error) return toast.error(error.message);
+      toast.success("Marca actualizada");
+    } else {
+      const { error } = await supabase.from("marks").insert(payload);
+      if (error) return toast.error(error.message);
+      toast.success("Marca creada");
+    }
+    setOpenMark(false); setEditingMark(null);
     setMarkForm({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
+    load();
+  };
+
+  const toggleMarkStatus = async (m: Mark) => {
+    const next = m.status === "activo" ? "archivado" : "activo";
+    await supabase.from("marks").update({ status: next }).eq("id", m.id);
     load();
   };
 
@@ -72,9 +103,9 @@ export default function Marcas() {
                 </DialogContent>
               </Dialog>
               <Dialog open={openMark} onOpenChange={setOpenMark}>
-                <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Marca</Button></DialogTrigger>
+                <DialogTrigger asChild><Button onClick={() => openMarkDialog()}><Plus className="mr-2 h-4 w-4" /> Marca</Button></DialogTrigger>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Nueva marca / prueba</DialogTitle></DialogHeader>
+                  <DialogHeader><DialogTitle>{editingMark ? "Editar marca" : "Nueva marca / prueba"}</DialogTitle></DialogHeader>
                   <div className="space-y-3">
                     <div className="space-y-2"><Label>Nombre</Label><Input value={markForm.nombre} onChange={(e) => setMarkForm({ ...markForm, nombre: e.target.value })} /></div>
                     <div className="space-y-2"><Label>Categoría</Label>
@@ -88,7 +119,7 @@ export default function Marcas() {
                         <Select value={markForm.value_type} onValueChange={(v) => setMarkForm({ ...markForm, value_type: v })}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            {["tiempo","distancia","repeticiones","peso","puntuacion","booleano","texto"].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                            {VALUE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
@@ -104,10 +135,10 @@ export default function Marcas() {
         }
       />
       <Card>
-        <CardHeader><CardTitle>Marcas configuradas</CardTitle></CardHeader>
-        <CardContent>
+        <CardHeader><CardTitle>Marcas configuradas ({marks.length})</CardTitle></CardHeader>
+        <CardContent className="overflow-x-auto">
           <Table>
-            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
             <TableBody>
               {marks.map((m) => (
                 <TableRow key={m.id}>
@@ -117,6 +148,14 @@ export default function Marcas() {
                   <TableCell>{m.unidad}</TableCell>
                   <TableCell>{m.mejor_mayor ? "Mayor" : "Menor"}</TableCell>
                   <TableCell><Badge variant={m.status === "activo" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
+                  {isCoach && (
+                    <TableCell className="text-right space-x-1">
+                      <Button size="sm" variant="ghost" onClick={() => openMarkDialog(m)}><Pencil className="h-3 w-3" /></Button>
+                      <Button size="sm" variant="ghost" onClick={() => toggleMarkStatus(m)} title={m.status === "activo" ? "Archivar" : "Reactivar"}>
+                        {m.status === "activo" ? <Archive className="h-3 w-3" /> : <Power className="h-3 w-3" />}
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

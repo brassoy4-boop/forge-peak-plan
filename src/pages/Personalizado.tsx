@@ -9,32 +9,47 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, History } from "lucide-react";
 import { toast } from "sonner";
+
+interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
 export default function Personalizado() {
   const { user, primaryRole } = useAuth();
   const isCoach = primaryRole === "entrenador" || primaryRole === "superadmin";
   const [items, setItems] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<ProfileLite[]>([]);
+  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>({});
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ user_id: "", titulo: "", contenido: "" });
   const [selected, setSelected] = useState<any | null>(null);
   const [versions, setVersions] = useState<any[]>([]);
+  const [newBlock, setNewBlock] = useState("");
 
   const load = async () => {
-    const [t, u] = await Promise.all([
-      supabase.from("personalized_trainings").select("*, profiles!personalized_trainings_user_id_fkey(nombre, apellidos)").order("created_at", { ascending: false }),
-      isCoach ? supabase.from("profiles").select("user_id, nombre, apellidos") : Promise.resolve({ data: [] } as any),
-    ]);
-    setItems(t.data ?? []); setUsers(u.data ?? []);
+    const { data: t } = await supabase.from("personalized_trainings").select("*").order("created_at", { ascending: false });
+    const list = t ?? [];
+    setItems(list);
+    const ids = Array.from(new Set(list.map((x: any) => x.user_id)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
+      const m: Record<string, ProfileLite> = {};
+      (profs ?? []).forEach((p: any) => { m[p.user_id] = p; });
+      setProfilesMap(m);
+    }
+    if (isCoach) {
+      const { data: u } = await supabase.from("profiles").select("user_id, nombre, apellidos").order("nombre");
+      setUsers(u ?? []);
+    }
   };
   useEffect(() => { load(); }, [user]);
 
-  useEffect(() => {
-    if (!selected) return;
-    supabase.from("personalized_training_versions").select("*").eq("training_id", selected.id).order("version", { ascending: false }).then(({ data }) => setVersions(data ?? []));
-  }, [selected]);
+  const loadVersions = async (id: string) => {
+    const { data } = await supabase.from("personalized_training_versions").select("*").eq("training_id", id).order("version", { ascending: false });
+    setVersions(data ?? []);
+  };
+
+  useEffect(() => { if (selected) loadVersions(selected.id); }, [selected]);
 
   const create = async () => {
     if (!form.user_id || !form.titulo) return toast.error("Datos incompletos");
@@ -46,6 +61,22 @@ export default function Personalizado() {
       training_id: data.id, version: 1, bloques: [{ tipo: "texto", contenido: form.contenido }] as any, created_by: user?.id,
     });
     toast.success("Ficha creada"); setOpen(false); setForm({ user_id: "", titulo: "", contenido: "" }); load();
+  };
+
+  const addVersion = async () => {
+    if (!selected || !newBlock.trim()) return;
+    const nextVersion = (selected.current_version ?? 1) + 1;
+    const lastBlocks = (versions[0]?.bloques as any[]) ?? [];
+    const newBlocks = [...lastBlocks, { tipo: "texto", contenido: newBlock }];
+    const { error } = await supabase.from("personalized_training_versions").insert({
+      training_id: selected.id, version: nextVersion, bloques: newBlocks as any, created_by: user?.id,
+    });
+    if (error) return toast.error(error.message);
+    await supabase.from("personalized_trainings").update({ current_version: nextVersion, updated_at: new Date().toISOString() }).eq("id", selected.id);
+    toast.success("Versión añadida");
+    setNewBlock("");
+    setSelected({ ...selected, current_version: nextVersion });
+    loadVersions(selected.id);
   };
 
   return (
@@ -73,30 +104,43 @@ export default function Personalizado() {
       />
       {!selected ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {items.map((i) => (
-            <Card key={i.id} className="cursor-pointer hover:border-primary" onClick={() => setSelected(i)}>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />{i.titulo}</CardTitle>
-                <p className="text-sm text-muted-foreground">{i.profiles?.nombre} {i.profiles?.apellidos} · v{i.current_version}</p>
-              </CardHeader>
-            </Card>
-          ))}
+          {items.map((i) => {
+            const p = profilesMap[i.user_id];
+            return (
+              <Card key={i.id} className="cursor-pointer hover:border-primary" onClick={() => setSelected(i)}>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />{i.titulo}</CardTitle>
+                  <p className="text-sm text-muted-foreground">{p ? `${p.nombre} ${p.apellidos}` : "—"} · v{i.current_version}</p>
+                </CardHeader>
+              </Card>
+            );
+          })}
           {items.length === 0 && <p className="col-span-full text-center text-muted-foreground py-8">Sin fichas.</p>}
         </div>
       ) : (
         <div className="space-y-4">
-          <Button variant="ghost" onClick={() => setSelected(null)}>← Volver</Button>
+          <Button variant="ghost" onClick={() => { setSelected(null); setVersions([]); }}>← Volver</Button>
           <Card>
-            <CardHeader><CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle>
+              <p className="text-sm text-muted-foreground">Versión actual: v{selected.current_version}</p>
+            </CardHeader>
             <CardContent className="space-y-4">
               {versions.map(v => (
                 <div key={v.id} className="border-l-2 border-primary pl-4">
-                  <div className="text-xs text-muted-foreground mb-1">Versión {v.version} · {new Date(v.created_at).toLocaleDateString("es-ES")}</div>
+                  <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><History className="h-3 w-3" /> Versión {v.version} · {new Date(v.created_at).toLocaleDateString("es-ES")}</div>
                   {(v.bloques as any[])?.map((b, idx) => (
-                    <div key={idx} className="prose prose-sm max-w-none whitespace-pre-wrap text-sm">{b.contenido}</div>
+                    <div key={idx} className="prose prose-sm max-w-none whitespace-pre-wrap text-sm pb-2">{b.contenido}</div>
                   ))}
                 </div>
               ))}
+              {isCoach && (
+                <div className="border-t pt-4 space-y-2">
+                  <Label>Añadir bloque (crea nueva versión)</Label>
+                  <Textarea rows={4} value={newBlock} onChange={(e) => setNewBlock(e.target.value)} placeholder="Nuevo contenido..." />
+                  <Button onClick={addVersion} disabled={!newBlock.trim()}>Guardar nueva versión</Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
