@@ -271,6 +271,10 @@ export default function CargaMasiva() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="import">
+          <ImportExcelPanel marks={marks} profiles={profiles} onImported={loadImports} testLabel={testLabel} userId={user?.id} />
+        </TabsContent>
+
         <TabsContent value="metrics">
           <Card>
             <CardHeader>
