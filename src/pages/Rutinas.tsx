@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, Dumbbell } from "lucide-react";
+import { Plus, Calendar, Dumbbell, Trash2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Rutinas() {
@@ -58,6 +58,41 @@ export default function Rutinas() {
     const { error } = await supabase.from("routine_exercises").insert({ routine_day_id: day.id, ...exForm, orden });
     if (error) return toast.error(error.message);
     toast.success("Ejercicio añadido"); setExOpen(false); load();
+  };
+
+  const removeExercise = async (id: string) => {
+    const { error } = await supabase.from("routine_exercises").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Ejercicio eliminado"); load();
+  };
+
+  const duplicateRoutine = async (r: any) => {
+    const { data: nr, error } = await supabase.from("routines").insert({
+      nombre: `${r.nombre} (copia)`, descripcion: r.descripcion, num_dias: r.num_dias, created_by: user?.id,
+    }).select().single();
+    if (error || !nr) return toast.error(error?.message ?? "Error");
+    const origDays = days.filter(d => d.routine_id === r.id);
+    if (origDays.length) {
+      const { data: newDays } = await supabase.from("routine_days").insert(
+        origDays.map(d => ({ routine_id: nr.id, dia_num: d.dia_num, nombre: d.nombre }))
+      ).select();
+      const dayIdMap: Record<string, string> = {};
+      origDays.forEach(od => {
+        const nd = (newDays ?? []).find((x: any) => x.dia_num === od.dia_num);
+        if (nd) dayIdMap[od.id] = nd.id;
+      });
+      const origEx = routineExercises.filter(re => origDays.some(d => d.id === re.routine_day_id));
+      if (origEx.length) {
+        await supabase.from("routine_exercises").insert(
+          origEx.map(e => ({
+            routine_day_id: dayIdMap[e.routine_day_id], exercise_id: e.exercise_id,
+            series: e.series, repeticiones: e.repeticiones, descanso: e.descanso,
+            tiempo: e.tiempo, carga: e.carga, observaciones: e.observaciones, orden: e.orden,
+          }))
+        );
+      }
+    }
+    toast.success("Rutina duplicada"); load();
   };
 
   const visibleRoutines = primaryRole === "usuario"
