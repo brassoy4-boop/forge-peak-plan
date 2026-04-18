@@ -20,6 +20,8 @@ export default function Ejercicios() {
   const [cats, setCats] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [filterCat, setFilterCat] = useState<string>("__all__");
+  const [search, setSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [openCat, setOpenCat] = useState(false);
   const [openEx, setOpenEx] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -78,7 +80,12 @@ export default function Ejercicios() {
     load();
   };
 
-  const visible = filterCat === "__all__" ? items : items.filter(i => i.category_id === filterCat);
+  const visible = items.filter(i => {
+    if (filterCat !== "__all__" && i.category_id !== filterCat) return false;
+    if (!showArchived && i.status !== "activo") return false;
+    if (search.trim() && !i.nombre.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div>

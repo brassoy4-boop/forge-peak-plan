@@ -9,8 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Calendar, Dumbbell, Trash2, Copy } from "lucide-react";
+import { Plus, Calendar, Dumbbell, Trash2, Copy, FileDown, Search } from "lucide-react";
 import { toast } from "sonner";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableItem } from "@/components/SortableItem";
+import { exportRoutinePdf } from "@/lib/pdf";
 
 export default function Rutinas() {
   const { primaryRole, user } = useAuth();
@@ -26,6 +30,12 @@ export default function Rutinas() {
   const [activeDay, setActiveDay] = useState(1);
   const [exOpen, setExOpen] = useState(false);
   const [exForm, setExForm] = useState({ exercise_id: "", series: 3, repeticiones: "10", descanso: "60s" });
+  const [search, setSearch] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const load = async () => {
     const [r, d, e, re, ra] = await Promise.all([
@@ -95,9 +105,54 @@ export default function Rutinas() {
     toast.success("Rutina duplicada"); load();
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !selected) return;
+    const day = days.find(d => d.routine_id === selected.id && d.dia_num === activeDay);
+    if (!day) return;
+    const dayEx = routineExercises.filter(re => re.routine_day_id === day.id).sort((a, b) => a.orden - b.orden);
+    const oldIndex = dayEx.findIndex(re => re.id === active.id);
+    const newIndex = dayEx.findIndex(re => re.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(dayEx, oldIndex, newIndex);
+    // Optimistic update
+    const others = routineExercises.filter(re => re.routine_day_id !== day.id);
+    const updated = reordered.map((re, idx) => ({ ...re, orden: idx }));
+    setRoutineExercises([...others, ...updated]);
+    // Persist
+    await Promise.all(updated.map(re => supabase.from("routine_exercises").update({ orden: re.orden }).eq("id", re.id)));
+  };
+
+  const exportPdf = async (r: any) => {
+    const rDays = days.filter(d => d.routine_id === r.id).sort((a, b) => a.dia_num - b.dia_num);
+    const dayIds = rDays.map(d => d.id);
+    const dayEx = routineExercises.filter(re => dayIds.includes(re.routine_day_id)).sort((a, b) => a.orden - b.orden);
+    exportRoutinePdf({
+      nombre: r.nombre,
+      descripcion: r.descripcion,
+      num_dias: r.num_dias,
+      days: rDays.map(d => ({
+        dia_num: d.dia_num,
+        nombre: d.nombre,
+        exercises: dayEx.filter(re => re.routine_day_id === d.id).map(re => {
+          const ex = exercises.find(e => e.id === re.exercise_id);
+          return {
+            nombre: ex?.nombre ?? "—",
+            series: re.series, repeticiones: re.repeticiones,
+            descanso: re.descanso, tiempo: re.tiempo,
+            carga: re.carga, observaciones: re.observaciones,
+          };
+        }),
+      })),
+    });
+  };
+
   const visibleRoutines = primaryRole === "usuario"
     ? assignments.filter(a => a.activa).map(a => a.routines).filter(Boolean)
     : routines;
+  const filteredRoutines = visibleRoutines.filter((r: any) =>
+    !search.trim() || r.nombre.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div>
@@ -119,29 +174,39 @@ export default function Rutinas() {
         )}
       />
       {!selected ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visibleRoutines.map((r) => (
-            <Card key={r.id} className="hover:border-primary">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="brand-title text-xl cursor-pointer flex-1" onClick={() => { setSelected(r); setActiveDay(1); }}>{r.nombre}</CardTitle>
-                  <Badge><Calendar className="mr-1 h-3 w-3" />{r.num_dias} días</Badge>
-                </div>
-                {r.descripcion && <CardDescription>{r.descripcion}</CardDescription>}
-              </CardHeader>
-              {isCoach && (
-                <CardContent className="flex gap-2 pt-0">
-                  <Button size="sm" variant="outline" onClick={() => { setSelected(r); setActiveDay(1); }}>Editar</Button>
-                  <Button size="sm" variant="ghost" onClick={() => duplicateRoutine(r)}><Copy className="h-3 w-3 mr-1" /> Duplicar</Button>
+        <>
+          <div className="mb-4 relative max-w-sm">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input className="pl-8" placeholder="Buscar rutina..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredRoutines.map((r: any) => (
+              <Card key={r.id} className="hover:border-primary">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="brand-title text-xl cursor-pointer flex-1" onClick={() => { setSelected(r); setActiveDay(1); }}>{r.nombre}</CardTitle>
+                    <Badge><Calendar className="mr-1 h-3 w-3" />{r.num_dias} días</Badge>
+                  </div>
+                  {r.descripcion && <CardDescription>{r.descripcion}</CardDescription>}
+                </CardHeader>
+                <CardContent className="flex gap-2 pt-0 flex-wrap">
+                  <Button size="sm" variant="outline" onClick={() => { setSelected(r); setActiveDay(1); }}>{isCoach ? "Editar" : "Ver"}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => exportPdf(r)} title="Descargar PDF"><FileDown className="h-3 w-3 mr-1" /> PDF</Button>
+                  {isCoach && (
+                    <Button size="sm" variant="ghost" onClick={() => duplicateRoutine(r)}><Copy className="h-3 w-3 mr-1" /> Duplicar</Button>
+                  )}
                 </CardContent>
-              )}
-            </Card>
-          ))}
-          {visibleRoutines.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">No hay rutinas.</p>}
-        </div>
+              </Card>
+            ))}
+            {filteredRoutines.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">No hay rutinas.</p>}
+          </div>
+        </>
       ) : (
         <div className="space-y-4">
-          <Button variant="ghost" onClick={() => setSelected(null)}>← Volver</Button>
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={() => setSelected(null)}>← Volver</Button>
+            <Button variant="outline" size="sm" onClick={() => exportPdf(selected)}><FileDown className="h-4 w-4 mr-2" /> Exportar PDF</Button>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle className="brand-title text-2xl">{selected.nombre}</CardTitle>
@@ -155,28 +220,34 @@ export default function Rutinas() {
               </div>
               {(() => {
                 const day = days.find(d => d.routine_id === selected.id && d.dia_num === activeDay);
-                const dayEx = routineExercises.filter(re => re.routine_day_id === day?.id);
+                const dayEx = routineExercises.filter(re => re.routine_day_id === day?.id).sort((a, b) => a.orden - b.orden);
                 return (
                   <div className="space-y-2">
-                    {dayEx.map((re) => {
-                      const ex = exercises.find(e => e.id === re.exercise_id);
-                      return (
-                        <div key={re.id} className="flex items-center gap-3 p-3 border rounded-md bg-card">
-                          <div className="w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
-                            {ex?.imagen_url ? <img src={ex.imagen_url} className="w-full h-full object-cover" alt="" /> : <Dumbbell className="h-6 w-6 text-muted-foreground" />}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium">{ex?.nombre}</div>
-                            <div className="text-xs text-muted-foreground">{re.series} series · {re.repeticiones} reps · descanso {re.descanso}</div>
-                          </div>
-                          {isCoach && (
-                            <Button size="icon" variant="ghost" onClick={() => removeExercise(re.id)} title="Eliminar">
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                      <SortableContext items={dayEx.map(re => re.id)} strategy={verticalListSortingStrategy}>
+                        {dayEx.map((re) => {
+                          const ex = exercises.find(e => e.id === re.exercise_id);
+                          return (
+                            <SortableItem key={re.id} id={re.id} disabled={!isCoach}>
+                              <div className="flex items-center gap-3 p-3 border rounded-md bg-card">
+                                <div className="w-12 h-12 bg-muted rounded flex items-center justify-center overflow-hidden">
+                                  {ex?.imagen_url ? <img src={ex.imagen_url} className="w-full h-full object-cover" alt="" /> : <Dumbbell className="h-6 w-6 text-muted-foreground" />}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium">{ex?.nombre}</div>
+                                  <div className="text-xs text-muted-foreground">{re.series} series · {re.repeticiones} reps · descanso {re.descanso}</div>
+                                </div>
+                                {isCoach && (
+                                  <Button size="icon" variant="ghost" onClick={() => removeExercise(re.id)} title="Eliminar">
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                )}
+                              </div>
+                            </SortableItem>
+                          );
+                        })}
+                      </SortableContext>
+                    </DndContext>
                     {dayEx.length === 0 && <p className="text-sm text-muted-foreground">Sin ejercicios este día.</p>}
                     {isCoach && (
                       <Dialog open={exOpen} onOpenChange={setExOpen}>
