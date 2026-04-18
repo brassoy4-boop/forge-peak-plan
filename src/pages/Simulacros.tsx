@@ -9,9 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Target, ChevronDown, ChevronUp, Archive } from "lucide-react";
+import { Plus, Target, ChevronDown, ChevronUp, Archive, X } from "lucide-react";
 import { toast } from "sonner";
 import { canExecuteSimulacro, isValidTime, isValidNumber, type Sexo } from "@/lib/validators";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableItem } from "@/components/SortableItem";
 
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
@@ -32,6 +35,8 @@ export default function Simulacros() {
   const [targetUserId, setTargetUserId] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [executionResults, setExecutionResults] = useState<Record<string, any[]>>({});
+
+  const tplSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const load = async () => {
     const [t, o, m, e] = await Promise.all([
@@ -173,7 +178,7 @@ export default function Simulacros() {
                     </Select>
                   </div>
                 </div>
-                <div className="space-y-2"><Label>Pruebas</Label>
+                <div className="space-y-2"><Label>Pruebas (selecciona y arrastra para ordenar)</Label>
                   <div className="border rounded p-2 max-h-48 overflow-y-auto space-y-1">
                     {marks.map(m => (
                       <label key={m.id} className="flex items-center gap-2 text-sm">
@@ -184,6 +189,34 @@ export default function Simulacros() {
                       </label>
                     ))}
                   </div>
+                  {form.mark_ids.length > 0 && (
+                    <div className="border rounded p-2 bg-muted/30">
+                      <div className="text-xs text-muted-foreground mb-1">Orden de las pruebas:</div>
+                      <DndContext sensors={tplSensors} collisionDetection={closestCenter} onDragEnd={(ev) => {
+                        const { active, over } = ev;
+                        if (!over || active.id === over.id) return;
+                        const oldIdx = form.mark_ids.indexOf(active.id as string);
+                        const newIdx = form.mark_ids.indexOf(over.id as string);
+                        setForm({ ...form, mark_ids: arrayMove(form.mark_ids, oldIdx, newIdx) });
+                      }}>
+                        <SortableContext items={form.mark_ids} strategy={verticalListSortingStrategy}>
+                          {form.mark_ids.map((mid) => {
+                            const m = marks.find(x => x.id === mid);
+                            return (
+                              <SortableItem key={mid} id={mid}>
+                                <div className="flex items-center justify-between text-sm py-1 px-2 bg-card rounded">
+                                  <span>{m?.nombre}</span>
+                                  <button type="button" onClick={() => setForm({ ...form, mark_ids: form.mark_ids.filter(i => i !== mid) })}>
+                                    <X className="h-3 w-3 text-muted-foreground" />
+                                  </button>
+                                </div>
+                              </SortableItem>
+                            );
+                          })}
+                        </SortableContext>
+                      </DndContext>
+                    </div>
+                  )}
                 </div>
               </div>
               <DialogFooter><Button onClick={createTpl}>Crear</Button></DialogFooter>
