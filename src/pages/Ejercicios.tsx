@@ -131,14 +131,19 @@ export default function Ejercicios() {
         )}
       />
 
-      <div className="mb-4 max-w-xs">
+      <div className="mb-4 flex flex-wrap gap-2 items-center">
+        <Input className="max-w-xs" placeholder="Buscar ejercicio..." value={search} onChange={(e) => setSearch(e.target.value)} />
         <Select value={filterCat} onValueChange={setFilterCat}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">Todas las categorías</SelectItem>
             {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
           </SelectContent>
         </Select>
+        <label className="text-sm flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+          Mostrar archivados
+        </label>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
