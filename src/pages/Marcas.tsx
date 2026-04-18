@@ -31,6 +31,9 @@ export default function Marcas() {
   const [catForm, setCatForm] = useState({ nombre: "" });
   const [editingMark, setEditingMark] = useState<Mark | null>(null);
   const [markForm, setMarkForm] = useState({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState<string>("__all__");
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = async () => {
     const [c, m] = await Promise.all([
@@ -137,10 +140,29 @@ export default function Marcas() {
       <Card>
         <CardHeader><CardTitle>Marcas configuradas ({marks.length})</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
+          <div className="mb-4 flex flex-wrap gap-2 items-center">
+            <Input className="max-w-xs" placeholder="Buscar marca..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Select value={filterCat} onValueChange={setFilterCat}>
+              <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todas las categorías</SelectItem>
+                {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <label className="text-sm flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />
+              Mostrar archivadas
+            </label>
+          </div>
           <Table>
             <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
             <TableBody>
-              {marks.map((m) => (
+              {marks.filter(m => {
+                if (filterCat !== "__all__" && m.category_id !== filterCat) return false;
+                if (!showArchived && m.status !== "activo") return false;
+                if (search.trim() && !m.nombre.toLowerCase().includes(search.toLowerCase())) return false;
+                return true;
+              }).map((m) => (
                 <TableRow key={m.id}>
                   <TableCell className="font-medium">{m.nombre}</TableCell>
                   <TableCell>{cats.find(c => c.id === m.category_id)?.nombre ?? "—"}</TableCell>

@@ -346,6 +346,45 @@ export type Database = {
           },
         ]
       }
+      mark_baremos: {
+        Row: {
+          created_at: string
+          id: string
+          mark_id: string
+          nivel: string
+          oposicion_id: string | null
+          orden: number
+          sexo: Database["public"]["Enums"]["sexo_enum"]
+          updated_at: string
+          valor_max: number | null
+          valor_min: number | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mark_id: string
+          nivel: string
+          oposicion_id?: string | null
+          orden?: number
+          sexo?: Database["public"]["Enums"]["sexo_enum"]
+          updated_at?: string
+          valor_max?: number | null
+          valor_min?: number | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mark_id?: string
+          nivel?: string
+          oposicion_id?: string | null
+          orden?: number
+          sexo?: Database["public"]["Enums"]["sexo_enum"]
+          updated_at?: string
+          valor_max?: number | null
+          valor_min?: number | null
+        }
+        Relationships: []
+      }
       mark_categories: {
         Row: {
           created_at: string

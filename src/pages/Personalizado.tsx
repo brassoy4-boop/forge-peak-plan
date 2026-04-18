@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Plus, FileText, History } from "lucide-react";
+import { Plus, FileText, History, FileDown } from "lucide-react";
 import { toast } from "sonner";
+import { exportPersonalizedPdf } from "@/lib/pdf";
 
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
@@ -119,7 +120,17 @@ export default function Personalizado() {
         </div>
       ) : (
         <div className="space-y-4">
-          <Button variant="ghost" onClick={() => { setSelected(null); setVersions([]); }}>← Volver</Button>
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" onClick={() => { setSelected(null); setVersions([]); }}>← Volver</Button>
+            <Button variant="outline" size="sm" onClick={() => {
+              const p = profilesMap[selected.user_id];
+              exportPersonalizedPdf({
+                titulo: selected.titulo,
+                athlete: p ? `${p.nombre} ${p.apellidos}` : undefined,
+                versions: versions.map(v => ({ version: v.version, created_at: v.created_at, bloques: (v.bloques as any[]) ?? [] })),
+              });
+            }}><FileDown className="h-4 w-4 mr-2" /> Exportar PDF</Button>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle>
