@@ -6,7 +6,7 @@ import {
 import {
   LayoutDashboard, Users, Trophy, Target, Dumbbell, ClipboardList, BookOpen,
   FileText, MessageSquare, MessagesSquare, BarChart3, Upload, Settings, LogOut,
-  Activity, ListChecks, FolderTree,
+  Activity, ListChecks, FolderTree, Gauge,
 } from "lucide-react";
 import { useAuth, AppRole } from "@/lib/auth";
 import { Brand } from "@/components/Brand";
@@ -31,6 +31,7 @@ const coachItems: Item[] = [
   { title: "Usuarios", url: "/app/usuarios", icon: Users },
   { title: "Oposiciones", url: "/app/oposiciones", icon: Trophy },
   { title: "Marcas", url: "/app/marcas", icon: ListChecks },
+  { title: "Baremos", url: "/app/baremos", icon: Gauge },
   { title: "Simulacros", url: "/app/simulacros", icon: Target },
   { title: "Ejercicios", url: "/app/ejercicios", icon: Activity },
   { title: "Rutinas", url: "/app/rutinas", icon: Dumbbell },
