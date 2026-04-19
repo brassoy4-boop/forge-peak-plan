@@ -6,11 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Brand } from "@/components/Brand";
-import { useAuth, PIN_STORAGE_KEY } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { Loader2, ShieldCheck } from "lucide-react";
 
-type Step = "credentials" | "pin" | "bootstrap" | "forgot";
+type Step = "credentials" | "signup" | "bootstrap" | "forgot";
 
 export default function AuthPage() {
   const navigate = useNavigate();
@@ -34,11 +34,10 @@ export default function AuthPage() {
     });
   }, []);
 
+  // Si ya hay sesión activa, ir directo a la app
   useEffect(() => {
-    if (!loading && session && sessionStorage.getItem(PIN_STORAGE_KEY) === "1") {
+    if (!loading && session && step !== "bootstrap") {
       navigate("/app", { replace: true });
-    } else if (!loading && session && step !== "bootstrap") {
-      setStep("pin");
     }
   }, [session, loading, navigate, step]);
 
@@ -51,20 +50,46 @@ export default function AuthPage() {
       toast.error("Credenciales incorrectas");
       return;
     }
-    setStep("pin");
+    toast.success("Acceso concedido");
+    navigate("/app", { replace: true });
   };
 
-  const onSubmitPin = async (e: React.FormEvent) => {
+  const onSubmitSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    const { data, error } = await supabase.rpc("verify_access_pin", { _pin: pin });
-    setSubmitting(false);
-    if (error || !data) {
-      toast.error("PIN incorrecto");
+
+    // 1. Validar PIN del centro contra app_settings (RPC verify_access_pin)
+    const { data: pinOk, error: pinErr } = await supabase.rpc("verify_access_pin", { _pin: pin });
+    if (pinErr || !pinOk) {
+      setSubmitting(false);
+      toast.error("PIN del centro incorrecto");
       return;
     }
-    sessionStorage.setItem(PIN_STORAGE_KEY, "1");
-    toast.success("Acceso concedido");
+
+    // 2. Crear cuenta
+    const { error: signErr } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/app`,
+        data: { nombre, apellidos },
+      },
+    });
+    if (signErr) {
+      setSubmitting(false);
+      toast.error("No se pudo crear la cuenta: " + signErr.message);
+      return;
+    }
+
+    // 3. Intentar login directo (si auto-confirm está activo)
+    const { error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setSubmitting(false);
+    if (loginErr) {
+      toast.success("Cuenta creada. Revisa tu email para confirmarla antes de entrar.");
+      setStep("credentials");
+      return;
+    }
+    toast.success("Cuenta creada. Bienvenido a Corpore10.");
     navigate("/app", { replace: true });
   };
 
@@ -84,7 +109,6 @@ export default function AuthPage() {
   const onBootstrap = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    // 1. Crear cuenta
     const { error: signErr } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -98,19 +122,17 @@ export default function AuthPage() {
       toast.error("No se pudo crear la cuenta: " + signErr.message);
       return;
     }
-    // 2. Iniciar sesión (por si email_confirm está activo, intenta login directo)
     await supabase.auth.signInWithPassword({ email: email.trim(), password });
-    // 3. Promocionar
     const { data: ok, error: promErr } = await supabase.rpc("promote_to_superadmin");
     setSubmitting(false);
     if (promErr || !ok) {
       toast.error("No se pudo promocionar a superadmin. Verifica el correo si es necesario.");
       return;
     }
-    toast.success("Superadmin creado. Introduce el PIN.");
+    toast.success("Superadmin creado correctamente.");
     await refreshRoles();
     setNeedsBootstrap(false);
-    setStep("pin");
+    navigate("/app", { replace: true });
   };
 
   return (
@@ -129,13 +151,13 @@ export default function AuthPage() {
               <CardTitle className="brand-title text-2xl flex items-center gap-2">
                 {step === "bootstrap" && <ShieldCheck className="h-6 w-6 text-primary" />}
                 {step === "credentials" && "Acceso al sistema"}
-                {step === "pin" && "Verificación PIN"}
+                {step === "signup" && "Crear cuenta"}
                 {step === "bootstrap" && "Crear superadmin inicial"}
                 {step === "forgot" && "Recuperar contraseña"}
               </CardTitle>
               <CardDescription>
                 {step === "credentials" && "Introduce tus credenciales de Corpore10."}
-                {step === "pin" && "Introduce el PIN de acceso del centro."}
+                {step === "signup" && "Necesitas el PIN del centro para registrarte."}
                 {step === "bootstrap" && "No hay ningún superadmin todavía. Crea el primero ahora."}
                 {step === "forgot" && "Te enviaremos un enlace por email para restablecerla."}
               </CardDescription>
@@ -153,16 +175,63 @@ export default function AuthPage() {
                   </div>
                   <Button type="submit" className="w-full" disabled={submitting}>
                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Continuar
+                    Entrar
                   </Button>
-                  <Button type="button" variant="link" className="w-full text-xs" onClick={() => setStep("forgot")}>
-                    He olvidado mi contraseña
-                  </Button>
+                  <div className="flex items-center justify-between text-xs">
+                    <Button type="button" variant="link" className="px-0" onClick={() => setStep("forgot")}>
+                      He olvidado mi contraseña
+                    </Button>
+                    <Button type="button" variant="link" className="px-0" onClick={() => setStep("signup")}>
+                      Crear cuenta
+                    </Button>
+                  </div>
                   {needsBootstrap && (
                     <Button type="button" variant="outline" className="w-full" onClick={() => setStep("bootstrap")}>
                       Crear superadmin inicial
                     </Button>
                   )}
+                </form>
+              )}
+
+              {step === "signup" && (
+                <form onSubmit={onSubmitSignup} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Nombre</Label>
+                      <Input value={nombre} onChange={(e) => setNombre(e.target.value)} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Apellidos</Label>
+                      <Input value={apellidos} onChange={(e) => setApellidos(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">Email</Label>
+                    <Input id="signup-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">Contraseña</Label>
+                    <Input id="signup-password" type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-pin">PIN del centro</Label>
+                    <Input
+                      id="signup-pin"
+                      inputMode="numeric"
+                      maxLength={10}
+                      required
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value)}
+                      placeholder="Solicítalo a tu entrenador"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Crear cuenta
+                  </Button>
+                  <Button type="button" variant="ghost" className="w-full" onClick={() => setStep("credentials")}>
+                    Volver al acceso
+                  </Button>
                 </form>
               )}
 
@@ -178,31 +247,6 @@ export default function AuthPage() {
                   </Button>
                   <Button type="button" variant="ghost" className="w-full" onClick={() => setStep("credentials")}>
                     Volver
-                  </Button>
-                </form>
-              )}
-
-              {step === "pin" && (
-                <form onSubmit={onSubmitPin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="pin">PIN de acceso</Label>
-                    <Input id="pin" inputMode="numeric" maxLength={10} required value={pin} onChange={(e) => setPin(e.target.value)} autoFocus />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={submitting}>
-                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Entrar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={async () => {
-                      await supabase.auth.signOut();
-                      setStep("credentials");
-                      setPin("");
-                    }}
-                  >
-                    Cancelar
                   </Button>
                 </form>
               )}
@@ -231,16 +275,13 @@ export default function AuthPage() {
                     {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Crear superadmin
                   </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Tras crear la cuenta, introducirás el PIN del centro (por defecto <strong>942</strong>).
-                  </p>
                 </form>
               )}
             </CardContent>
           </Card>
 
           <p className="text-center text-xs text-white/50">
-            Sólo personal autorizado. Las cuentas se crean desde el panel del superadmin.
+            Sólo personal autorizado. Para registrarte necesitas el PIN del centro.
           </p>
         </div>
       </div>
