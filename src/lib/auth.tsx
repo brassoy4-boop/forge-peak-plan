@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    // Limpieza por compatibilidad con sesiones antiguas
     sessionStorage.removeItem(PIN_OK_KEY);
     await supabase.auth.signOut();
   };
