@@ -1,66 +1,65 @@
 
 
-El usuario pide tres cambios concretos. Reviso rápido el estado actual antes de planificar.
+The user wants to import ~1796 exercises from a MySQL dump, mapping area_id to exercise_categories, and downloading images from a remote server pattern.
 
-Cambios solicitados:
-1. **PWA** — el contexto avisa que es delicado en preview. Recomendaré la versión "instalable simple" (manifest + icons + display standalone) sin service worker, que es lo que de verdad necesita el equipo de Corpore10 para "instalar en pantalla de inicio". Sin SW evitamos romper el preview.
-2. **PIN solo en registro** — actualmente el PIN se pide tras login (PIN_STORAGE_KEY en sessionStorage, ProtectedRoute lo verifica). Hay que: quitar verificación de PIN en ProtectedRoute, quitar la pantalla/paso de PIN tras login, añadir campo PIN al formulario de signup en Auth.tsx, validar contra `app_settings.access_pin` antes de llamar a signUp.
-3. **Quitar adjuntos del checklist pendiente** — son tareas que no quiere; solo afecta al checklist interno, no hay código de adjuntos en chat/foro/diario que retirar (nunca se implementó).
+Let me check current state and plan the import.
 
-También retiro del checklist pendiente lo que ya no aplica y dejo el plan de cierre actualizado.
+Key tasks:
+1. Parse `areas.sql` → upsert into `exercise_categories` (preserving area_id mapping)
+2. Parse `exercises.sql` → for each exercise:
+   - Map `area_id` → `category_id`
+   - Build image URL from `image` field: `exercises\\February2023\\256.jpg` → `https://app.corpore10trainer.com/storage/app/public/exercises/February2023/256.jpg`
+   - Download image, upload to `attachments` bucket under `exercises/`
+   - Insert exercise with `nombre`, `category_id`, `imagen_url`
+3. The current `exercise_categories` table has only `nombre`, `orden`, `status` — no slot for legacy area_id. I'll use a temp map (area_id → new uuid) built in the script during the same run.
 
-# Plan de implementación
+Considerations:
+- 1796 exercises × image download = heavy. Run as a one-off Node script in /tmp using exec, in batches with concurrency limit (e.g., 8 parallel).
+- Some images may 404 → skip image, still create exercise.
+- Avoid duplicates: check existing exercise by `nombre` first (or wipe relevant ones — better to skip dupes).
+- Use SUPABASE_SERVICE_ROLE_KEY for direct insertion + storage upload from script (already available as secret in sandbox env).
+- Categories: areas.sql has 20 areas. Insert all with the legacy area_id in a local map. We won't store area_id in DB — just need the runtime mapping. Set `orden = area_id` to keep order.
+- Image storage path: `exercises/<filename>` in `attachments` bucket, public URL stored in `imagen_url`.
 
-## 1. PWA instalable (sin service worker)
+Plan presentation:
 
-Para evitar problemas en el preview de Lovable, NO añadiré `vite-plugin-pwa` ni service worker. Implementaré PWA "instalable simple":
+# Plan: importar ~1.796 ejercicios desde el SQL legado
 
-- Crear `public/manifest.webmanifest` con nombre Corpore10, `display: "standalone"`, `theme_color`, `background_color` y referencias a icons.
-- Crear iconos `public/icon-192.png` y `public/icon-512.png` (los genero a partir del logo/Brand existente; si no hay, uso uno generado con el primary color).
-- Añadir en `index.html`:
-  - `<link rel="manifest" href="/manifest.webmanifest">`
-  - `<meta name="theme-color" content="...">`
-  - `<link rel="apple-touch-icon" href="/icon-192.png">`
-  - `<meta name="apple-mobile-web-app-capable" content="yes">`
-  - `<meta name="apple-mobile-web-app-status-bar-style" content="default">`
-- Actualizar `<title>` y meta description con la marca real.
+## Qué voy a hacer
 
-Resultado: usuarios podrán "Añadir a pantalla de inicio" desde Chrome/Safari móvil y la app se abrirá en modo standalone. Sin offline, sin caché → el preview de Lovable sigue funcionando.
+1. **Categorías (`areas.sql` → `exercise_categories`)**
+   - Parsear las 20 áreas del fichero.
+   - Insertarlas en `exercise_categories` (si ya existen por nombre, reutilizarlas).
+   - Construir en memoria un mapa `legacy_area_id → category_uuid` para usarlo después.
 
-## 2. PIN movido al registro
+2. **Ejercicios (`exercises.sql` → `exercises` + bucket `attachments`)**
+   Script Node ejecutado en sandbox con `SUPABASE_SERVICE_ROLE_KEY`:
+   - Parsear las 1.796 filas (nombre, area_id, image).
+   - Para cada una:
+     1. Si la `image` es del tipo `exercises\\February2023\\256.jpg` → construir URL pública: `https://app.corpore10trainer.com/storage/app/public/exercises/February2023/256.jpg`.
+     2. Descargar la imagen.
+     3. Subirla a `attachments/exercises/<nombre-fichero>` (bucket público).
+     4. Obtener la `public URL`.
+     5. Insertar en `exercises` con `nombre`, `category_id` (mapeado), `imagen_url`.
+   - Si una imagen no existe (404) → se crea el ejercicio sin imagen y se loguea.
+   - Si el ejercicio ya existe (mismo nombre exacto) → se omite, no se duplica.
+   - Concurrencia: 8 descargas/uploads en paralelo para ir rápido sin saturar.
 
-**ProtectedRoute.tsx**: eliminar la comprobación `pinOk` y el redirect cuando no está. Solo valida sesión y rol.
+3. **Reporte final**
+   - Total importados, omitidos por duplicado, fallos de imagen, fallos críticos.
+   - Lo dejaré por consola para que lo veas tras la ejecución.
 
-**Auth.tsx** (formulario de Sign Up):
-- Añadir campo `pin` (input 4 dígitos) visible solo en modo "Registro".
-- Antes de `supabase.auth.signUp`, leer `app_settings.access_pin` y comparar con el PIN introducido. Si no coincide → toast de error y abortar.
-- Si coincide → continuar con el signup normal.
+## Lo que NO hago
 
-**Login**: el PIN ya no se pide. Quitar cualquier referencia a `PIN_STORAGE_KEY` en el flujo post-login.
-
-**auth.tsx (lib)**: dejar exportado `PIN_STORAGE_KEY` solo si se usa en otros sitios (lo retiro si solo lo usaba ProtectedRoute).
-
-**Admin.tsx**: la gestión del PIN sigue igual (superadmin lo puede cambiar). Solo cambia el momento en que se exige.
-
-## 3. Checklist actualizado (sin adjuntos)
-
-Retiro de pendientes:
-- Adjuntos en Chat, Foro, Diario.
-
-Pendientes reales que quedan tras esta entrega:
-- Notificación al recibir nueva asignación de rutina.
-- Búsqueda + paginación en Usuarios.
-- Auditoría (`audit_log`).
-- Verificación de email obligatoria.
+- No toco esquema de base de datos (no añado columna `legacy_id` — el mapeo solo vive durante la ejecución del script). Si en el futuro necesitas reimportar y reconciliar, lo reconsideramos.
+- No borro ejercicios existentes. Solo añado y omito duplicados por nombre.
+- No importo los campos `dificulty`, `machine_id`, `video_url`, `video_file`, `original_url` (quedan fuera del modelo actual). Si los quieres, dímelo y los añadimos al esquema.
 
 ## Archivos que tocaré
 
-- `index.html` — meta tags PWA, título, manifest link
-- `public/manifest.webmanifest` (nuevo)
-- `public/icon-192.png`, `public/icon-512.png` (nuevos, generados)
-- `src/components/ProtectedRoute.tsx` — quitar chequeo PIN
-- `src/pages/Auth.tsx` — añadir PIN al formulario de registro y validarlo
-- `src/lib/auth.tsx` — limpiar `PIN_STORAGE_KEY` si queda huérfano
+- Script temporal en `/tmp/import-exercises.mjs` (no se queda en el repo).
+- Sin cambios en código de la app.
+- Sin migraciones.
 
-Sin migraciones de BD. Sin nuevas dependencias.
+¿Apruebas y lanzo la importación?
 
