@@ -35,6 +35,9 @@ export default function Simulacros() {
   const [targetUserId, setTargetUserId] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [executionResults, setExecutionResults] = useState<Record<string, any[]>>({});
+  const [editingExec, setEditingExec] = useState<any | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [editObs, setEditObs] = useState("");
 
   const tplSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -146,6 +149,47 @@ export default function Simulacros() {
       const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", execId);
       setExecutionResults((p) => ({ ...p, [execId]: data ?? [] }));
     }
+  };
+
+  const startEditExec = async (exec: any) => {
+    let det = executionResults[exec.id];
+    if (!det) {
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", exec.id);
+      det = data ?? [];
+      setExecutionResults((p) => ({ ...p, [exec.id]: det! }));
+    }
+    const vals: Record<string, string> = {};
+    det.forEach((r: any) => { vals[r.mark_id] = (r.valor_numerico ?? r.valor_texto ?? "").toString(); });
+    setEditValues(vals);
+    setEditObs(exec.observaciones ?? "");
+    setEditingExec(exec);
+  };
+
+  const saveEditExec = async () => {
+    if (!editingExec) return;
+    const det = executionResults[editingExec.id] ?? [];
+    // Update each result
+    for (const r of det) {
+      const v = editValues[r.mark_id] ?? "";
+      const num = Number(v);
+      const isNum = v !== "" && !isNaN(num);
+      await supabase.from("simulacro_results").update({
+        valor_numerico: isNum ? num : null,
+        valor_texto: isNum ? null : (v || null),
+      }).eq("id", r.id);
+      // Reflect in mark_records
+      await supabase.from("mark_records").update({
+        valor_numerico: isNum ? num : null,
+        valor_texto: isNum ? null : (v || null),
+      }).eq("origen_ref", editingExec.id).eq("mark_id", r.mark_id);
+    }
+    await supabase.from("simulacro_executions").update({ observaciones: editObs }).eq("id", editingExec.id);
+    toast.success("Simulacro actualizado");
+    // Refresh results for this exec
+    const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", editingExec.id);
+    setExecutionResults((p) => ({ ...p, [editingExec.id]: data ?? [] }));
+    setEditingExec(null);
+    load();
   };
 
   const visibleTemplates = templates.filter((t) => isCoach || t.status === "activo");
@@ -313,6 +357,11 @@ export default function Simulacros() {
                         </div>
                       ))}
                       {e.observaciones && <p className="text-xs text-muted-foreground pt-2 italic">{e.observaciones}</p>}
+                      {(isCoach || e.user_id === user?.id) && (
+                        <div className="pt-2">
+                          <Button size="sm" variant="outline" onClick={() => startEditExec(e)}>Editar</Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -322,6 +371,31 @@ export default function Simulacros() {
           {executions.length === 0 && <p className="text-muted-foreground text-center py-4">Sin ejecuciones.</p>}
         </div>
       </div>
+
+      {/* Editar simulacro del histórico */}
+      <Dialog open={!!editingExec} onOpenChange={(o) => !o && setEditingExec(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Editar resultados: {editingExec?.simulacro_templates?.nombre}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {(executionResults[editingExec?.id] ?? []).map((r: any) => (
+              <div key={r.id} className="grid grid-cols-3 items-center gap-2">
+                <Label>{r.marks?.nombre}</Label>
+                <Input
+                  value={editValues[r.mark_id] ?? ""}
+                  onChange={(ev) => setEditValues({ ...editValues, [r.mark_id]: ev.target.value })}
+                  placeholder={r.marks?.unidad ?? ""}
+                />
+                <span className="text-xs text-muted-foreground">{r.marks?.unidad}</span>
+              </div>
+            ))}
+            <div className="space-y-2"><Label>Observaciones</Label><Input value={editObs} onChange={(e) => setEditObs(e.target.value)} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingExec(null)}>Cancelar</Button>
+            <Button onClick={saveEditExec}>Guardar cambios</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

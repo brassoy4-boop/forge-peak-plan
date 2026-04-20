@@ -117,16 +117,21 @@ export default function AuthPage() {
         data: { nombre, apellidos },
       },
     });
-    if (signErr) {
+    if (signErr && !signErr.message.toLowerCase().includes("already")) {
       setSubmitting(false);
       toast.error("No se pudo crear la cuenta: " + signErr.message);
       return;
     }
-    await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { error: loginErr } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (loginErr) {
+      setSubmitting(false);
+      toast.info("Revisa tu email para confirmar la cuenta y vuelve a esta pantalla. Tras confirmar, pulsa de nuevo 'Crear superadmin' con los mismos datos.");
+      return;
+    }
     const { data: ok, error: promErr } = await supabase.rpc("promote_to_superadmin");
     setSubmitting(false);
     if (promErr || !ok) {
-      toast.error("No se pudo promocionar a superadmin. Verifica el correo si es necesario.");
+      toast.error("No se pudo promocionar a superadmin. Es posible que ya exista uno.");
       return;
     }
     toast.success("Superadmin creado correctamente.");

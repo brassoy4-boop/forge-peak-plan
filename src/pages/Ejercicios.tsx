@@ -82,7 +82,11 @@ export default function Ejercicios() {
 
   const visible = items.filter(i => {
     if (filterCat !== "__all__" && i.category_id !== filterCat) return false;
-    if (!showArchived && i.status !== "activo") return false;
+    if (showArchived) {
+      if (i.status === "activo") return false;
+    } else {
+      if (i.status !== "activo") return false;
+    }
     if (search.trim() && !i.nombre.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });

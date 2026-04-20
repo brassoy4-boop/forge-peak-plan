@@ -517,7 +517,7 @@ export default function Rutinas() {
                         <Plus className="h-4 w-4 mr-1" /> Añadir ejercicio
                       </Button>
                     </div>
-                    <ScrollArea className="flex-1 pr-2">
+                    <ScrollArea className="flex-1 min-h-[55vh] pr-2">
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(e, day.id)}>
                         <SortableContext items={dayEx.map((re) => re.id)} strategy={verticalListSortingStrategy}>
                           <div className="space-y-2">
