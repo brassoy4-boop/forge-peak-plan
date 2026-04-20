@@ -9,14 +9,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
-import { Plus, MessageSquarePlus } from "lucide-react";
+import { Plus, MessageSquarePlus, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
 export default function Diario() {
   const { user, primaryRole } = useAuth();
   const isCoach = primaryRole === "entrenador" || primaryRole === "superadmin";
+  const isSuperadmin = primaryRole === "superadmin";
+
   const [fields, setFields] = useState<any[]>([]);
   const [sessionTypes, setSessionTypes] = useState<any[]>([]);
   const [entries, setEntries] = useState<any[]>([]);
@@ -31,6 +36,7 @@ export default function Diario() {
   const [filterType, setFilterType] = useState<string>("__all__");
   const [filterFrom, setFilterFrom] = useState<string>("");
   const [commentDraft, setCommentDraft] = useState<Record<string, string>>({});
+  const [userPickerOpen, setUserPickerOpen] = useState(false);
 
   const load = async () => {
     const [f, st] = await Promise.all([
@@ -42,16 +48,21 @@ export default function Diario() {
     setValues(init);
 
     if (isCoach && user) {
-      const { data: ca } = await supabase.from("coach_assignments").select("user_id").eq("coach_id", user.id);
-      const ids = (ca ?? []).map((c) => c.user_id);
-      let assignedProfiles: ProfileLite[] = [];
-      if (ids.length) {
-        const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
-        assignedProfiles = profs ?? [];
+      let profs: ProfileLite[] = [];
+      if (isSuperadmin) {
+        const { data } = await supabase.from("profiles").select("user_id, nombre, apellidos").order("nombre");
+        profs = data ?? [];
+      } else {
+        const { data: ca } = await supabase.from("coach_assignments").select("user_id").eq("coach_id", user.id);
+        const ids = (ca ?? []).map((c) => c.user_id);
+        if (ids.length) {
+          const { data } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids).order("nombre");
+          profs = data ?? [];
+        }
       }
-      setCoachUsers(assignedProfiles);
+      setCoachUsers(profs);
       const m: Record<string, ProfileLite> = {};
-      assignedProfiles.forEach((p) => { m[p.user_id] = p; });
+      profs.forEach((p) => { m[p.user_id] = p; });
       setProfilesMap(m);
     }
     await loadEntries();
@@ -68,7 +79,23 @@ export default function Diario() {
     if (filterType !== "__all__") q = q.eq("session_type_id", filterType);
     if (filterFrom) q = q.gte("fecha", filterFrom);
     const { data } = await q;
-    setEntries(data ?? []);
+    const list = data ?? [];
+    setEntries(list);
+
+    // Asegurarse de tener los perfiles de los autores que aparecen
+    if (isCoach) {
+      const missing = Array.from(new Set(list.map((e) => e.user_id))).filter((uid) => !profilesMap[uid]);
+      if (missing.length) {
+        const { data: extra } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", missing);
+        if (extra) {
+          setProfilesMap((prev) => {
+            const m = { ...prev };
+            extra.forEach((p) => { m[p.user_id] = p; });
+            return m;
+          });
+        }
+      }
+    }
   };
 
   useEffect(() => { load(); }, [user, primaryRole]);
@@ -92,7 +119,6 @@ export default function Diario() {
     const entry = entries.find((x) => x.id === entryId);
     const { error } = await supabase.from("diary_entries").update({ comentario_entrenador: txt }).eq("id", entryId);
     if (error) return toast.error(error.message);
-    // Notificar al deportista
     if (entry && entry.user_id !== user?.id) {
       await supabase.from("notifications").insert({
         user_id: entry.user_id, tipo: "diario",
@@ -108,6 +134,13 @@ export default function Diario() {
 
   const visibleEntries = useMemo(() => entries, [entries]);
 
+  const filterUserLabel = filterUser === "__all__"
+    ? (isSuperadmin ? "Todos los deportistas" : "Todos mis deportistas")
+    : (() => {
+        const p = coachUsers.find((u) => u.user_id === filterUser) ?? profilesMap[filterUser];
+        return p ? `${p.nombre} ${p.apellidos}` : "Deportista";
+      })();
+
   return (
     <div>
       <PageHeader title="Diario de entrenamiento" description="Registra cada sesión, sensaciones y resultados."
@@ -118,13 +151,41 @@ export default function Diario() {
         <Card className="mb-6">
           <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="space-y-2"><Label>Deportista</Label>
-              <Select value={filterUser} onValueChange={setFilterUser}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">Todos mis deportistas</SelectItem>
-                  {coachUsers.map(u => <SelectItem key={u.user_id} value={u.user_id}>{u.nombre} {u.apellidos}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Popover open={userPickerOpen} onOpenChange={setUserPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+                    <span className="truncate">{filterUserLabel}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar deportista..." />
+                    <CommandList>
+                      <CommandEmpty>Sin resultados.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="__all__ todos"
+                          onSelect={() => { setFilterUser("__all__"); setUserPickerOpen(false); }}
+                        >
+                          <Check className={cn("mr-2 h-4 w-4", filterUser === "__all__" ? "opacity-100" : "opacity-0")} />
+                          {isSuperadmin ? "Todos los deportistas" : "Todos mis deportistas"}
+                        </CommandItem>
+                        {coachUsers.map((u) => (
+                          <CommandItem
+                            key={u.user_id}
+                            value={`${u.nombre} ${u.apellidos}`}
+                            onSelect={() => { setFilterUser(u.user_id); setUserPickerOpen(false); }}
+                          >
+                            <Check className={cn("mr-2 h-4 w-4", filterUser === u.user_id ? "opacity-100" : "opacity-0")} />
+                            {u.nombre} {u.apellidos}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2"><Label>Tipo de sesión</Label>
               <Select value={filterType} onValueChange={setFilterType}>
@@ -186,7 +247,11 @@ export default function Diario() {
                 <div className="flex justify-between flex-wrap gap-2">
                   <CardTitle className="text-base">
                     {new Date(e.fecha).toLocaleDateString("es-ES")} · {e.session_types?.nombre ?? "Sin tipo"}
-                    {isCoach && author && <span className="ml-2 text-sm text-muted-foreground">({author.nombre} {author.apellidos})</span>}
+                    {isCoach && (
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        ({author ? `${author.nombre} ${author.apellidos}` : "—"})
+                      </span>
+                    )}
                   </CardTitle>
                   <span className="text-xs text-muted-foreground">{e.completado}</span>
                 </div>
