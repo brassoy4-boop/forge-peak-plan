@@ -213,7 +213,8 @@ export default function Rutinas() {
 
   const updateExerciseField = async (id: string, field: string, value: any) => {
     setRoutineExercises((prev) => prev.map((re) => re.id === id ? { ...re, [field]: value } : re));
-    await supabase.from("routine_exercises").update({ [field]: value }).eq("id", id);
+    const patch: Record<string, any> = { [field]: value };
+    await supabase.from("routine_exercises").update(patch as any).eq("id", id);
   };
 
   const removeExercise = async (id: string) => {
