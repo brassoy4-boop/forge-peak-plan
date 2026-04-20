@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { FileUploader } from "@/components/FileUploader";
 
 interface Oposicion {
   id: string; nombre: string; descripcion: string | null; imagen_url: string | null; status: string;
@@ -71,7 +72,7 @@ export default function Oposiciones() {
                 <div className="space-y-4">
                   <div className="space-y-2"><Label>Nombre</Label><Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></div>
                   <div className="space-y-2"><Label>Descripción</Label><Textarea value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} /></div>
-                  <div className="space-y-2"><Label>URL de imagen</Label><Input value={form.imagen_url} onChange={(e) => setForm({ ...form, imagen_url: e.target.value })} /></div>
+                  <div className="space-y-2"><Label>Imagen</Label><FileUploader folder="oposiciones" value={form.imagen_url} onChange={(url) => setForm({ ...form, imagen_url: url ?? "" })} /></div>
                 </div>
                 <DialogFooter><Button onClick={onSave}>Guardar</Button></DialogFooter>
               </DialogContent>
