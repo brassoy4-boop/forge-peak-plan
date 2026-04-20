@@ -448,12 +448,12 @@ export default function Rutinas() {
 
       {/* ===== Editor diálogo grande ===== */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="flex h-[92vh] max-w-6xl min-h-0 flex-col p-0">
-          <DialogHeader className="px-6 pt-6">
+        <DialogContent className="!flex h-[92vh] max-w-6xl min-h-0 flex-col gap-0 p-0">
+          <DialogHeader className="shrink-0 px-6 pt-6">
             <DialogTitle>{editing ? `Editar rutina: ${editing.nombre}` : "Nueva rutina"}</DialogTitle>
           </DialogHeader>
 
-          <div className="px-6 pb-2 grid grid-cols-1 md:grid-cols-[1fr,1fr,140px] gap-3">
+          <div className="shrink-0 px-6 pb-2 pt-3 grid grid-cols-1 md:grid-cols-[1fr,1fr,140px] gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Nombre</Label>
               <Input
