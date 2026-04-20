@@ -357,6 +357,11 @@ export default function Simulacros() {
                         </div>
                       ))}
                       {e.observaciones && <p className="text-xs text-muted-foreground pt-2 italic">{e.observaciones}</p>}
+                      {(isCoach || e.user_id === user?.id) && (
+                        <div className="pt-2">
+                          <Button size="sm" variant="outline" onClick={() => startEditExec(e)}>Editar</Button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -366,6 +371,31 @@ export default function Simulacros() {
           {executions.length === 0 && <p className="text-muted-foreground text-center py-4">Sin ejecuciones.</p>}
         </div>
       </div>
+
+      {/* Editar simulacro del histórico */}
+      <Dialog open={!!editingExec} onOpenChange={(o) => !o && setEditingExec(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Editar resultados: {editingExec?.simulacro_templates?.nombre}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {(executionResults[editingExec?.id] ?? []).map((r: any) => (
+              <div key={r.id} className="grid grid-cols-3 items-center gap-2">
+                <Label>{r.marks?.nombre}</Label>
+                <Input
+                  value={editValues[r.mark_id] ?? ""}
+                  onChange={(ev) => setEditValues({ ...editValues, [r.mark_id]: ev.target.value })}
+                  placeholder={r.marks?.unidad ?? ""}
+                />
+                <span className="text-xs text-muted-foreground">{r.marks?.unidad}</span>
+              </div>
+            ))}
+            <div className="space-y-2"><Label>Observaciones</Label><Input value={editObs} onChange={(e) => setEditObs(e.target.value)} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingExec(null)}>Cancelar</Button>
+            <Button onClick={saveEditExec}>Guardar cambios</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
