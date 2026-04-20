@@ -448,7 +448,7 @@ export default function Rutinas() {
 
       {/* ===== Editor diálogo grande ===== */}
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="max-w-6xl h-[90vh] flex flex-col p-0">
+        <DialogContent className="flex h-[92vh] max-w-6xl min-h-0 flex-col p-0">
           <DialogHeader className="px-6 pt-6">
             <DialogTitle>{editing ? `Editar rutina: ${editing.nombre}` : "Nueva rutina"}</DialogTitle>
           </DialogHeader>
@@ -492,7 +492,7 @@ export default function Rutinas() {
               </div>
             </div>
           ) : (
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden px-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col overflow-hidden px-6">
               <TabsList className="flex-wrap h-auto justify-start">
                 {Array.from({ length: tabsCount }, (_, i) => i + 1).map((n) => (
                   <TabsTrigger key={n} value={`dia-${n}`}>Día {n}</TabsTrigger>
@@ -505,7 +505,7 @@ export default function Rutinas() {
                 if (!day) return null;
                 const dayEx = routineExercises.filter((re) => re.routine_day_id === day.id).sort((a, b) => a.orden - b.orden);
                 return (
-                  <TabsContent key={n} value={`dia-${n}`} className="flex-1 overflow-hidden flex flex-col mt-4">
+                  <TabsContent key={n} value={`dia-${n}`} className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">
                     <div className="flex items-center gap-2 mb-3">
                       <Label className="text-xs whitespace-nowrap">Nombre del día:</Label>
                       <Input
@@ -517,7 +517,7 @@ export default function Rutinas() {
                         <Plus className="h-4 w-4 mr-1" /> Añadir ejercicio
                       </Button>
                     </div>
-                    <ScrollArea className="flex-1 min-h-[55vh] pr-2">
+                    <ScrollArea className="h-full min-h-[68vh] flex-1 pr-2">
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleDragEnd(e, day.id)}>
                         <SortableContext items={dayEx.map((re) => re.id)} strategy={verticalListSortingStrategy}>
                           <div className="space-y-2">
