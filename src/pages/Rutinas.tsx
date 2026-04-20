@@ -505,8 +505,8 @@ export default function Rutinas() {
                 if (!day) return null;
                 const dayEx = routineExercises.filter((re) => re.routine_day_id === day.id).sort((a, b) => a.orden - b.orden);
                 return (
-                  <TabsContent key={n} value={`dia-${n}`} className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden">
-                    <div className="flex items-center gap-2 mb-3">
+                  <TabsContent key={n} value={`dia-${n}`} className="mt-4 data-[state=active]:flex min-h-0 flex-1 flex-col overflow-hidden">
+                    <div className="flex shrink-0 items-center gap-2 mb-3">
                       <Label className="text-xs whitespace-nowrap">Nombre del día:</Label>
                       <Input
                         defaultValue={day.nombre ?? ""}
