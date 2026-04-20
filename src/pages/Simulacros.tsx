@@ -35,6 +35,9 @@ export default function Simulacros() {
   const [targetUserId, setTargetUserId] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [executionResults, setExecutionResults] = useState<Record<string, any[]>>({});
+  const [editingExec, setEditingExec] = useState<any | null>(null);
+  const [editValues, setEditValues] = useState<Record<string, string>>({});
+  const [editObs, setEditObs] = useState("");
 
   const tplSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -146,6 +149,47 @@ export default function Simulacros() {
       const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", execId);
       setExecutionResults((p) => ({ ...p, [execId]: data ?? [] }));
     }
+  };
+
+  const startEditExec = async (exec: any) => {
+    let det = executionResults[exec.id];
+    if (!det) {
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", exec.id);
+      det = data ?? [];
+      setExecutionResults((p) => ({ ...p, [exec.id]: det! }));
+    }
+    const vals: Record<string, string> = {};
+    det.forEach((r: any) => { vals[r.mark_id] = (r.valor_numerico ?? r.valor_texto ?? "").toString(); });
+    setEditValues(vals);
+    setEditObs(exec.observaciones ?? "");
+    setEditingExec(exec);
+  };
+
+  const saveEditExec = async () => {
+    if (!editingExec) return;
+    const det = executionResults[editingExec.id] ?? [];
+    // Update each result
+    for (const r of det) {
+      const v = editValues[r.mark_id] ?? "";
+      const num = Number(v);
+      const isNum = v !== "" && !isNaN(num);
+      await supabase.from("simulacro_results").update({
+        valor_numerico: isNum ? num : null,
+        valor_texto: isNum ? null : (v || null),
+      }).eq("id", r.id);
+      // Reflect in mark_records
+      await supabase.from("mark_records").update({
+        valor_numerico: isNum ? num : null,
+        valor_texto: isNum ? null : (v || null),
+      }).eq("origen_ref", editingExec.id).eq("mark_id", r.mark_id);
+    }
+    await supabase.from("simulacro_executions").update({ observaciones: editObs }).eq("id", editingExec.id);
+    toast.success("Simulacro actualizado");
+    // Refresh results for this exec
+    const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", editingExec.id);
+    setExecutionResults((p) => ({ ...p, [editingExec.id]: data ?? [] }));
+    setEditingExec(null);
+    load();
   };
 
   const visibleTemplates = templates.filter((t) => isCoach || t.status === "activo");
