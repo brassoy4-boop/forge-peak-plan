@@ -69,12 +69,12 @@ export function ExercisePicker({ open, onOpenChange, onAdd, title = "Añadir eje
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] min-h-0 flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr,220px] gap-2">
+        <div className="shrink-0 grid grid-cols-1 md:grid-cols-[1fr,220px] gap-2">
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input className="pl-8" placeholder="Buscar por nombre..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -88,7 +88,8 @@ export function ExercisePicker({ open, onOpenChange, onAdd, title = "Añadir eje
           </Select>
         </div>
 
-        <ScrollArea className="flex-1 max-h-[40vh] border rounded-md p-2">
+        <ScrollArea className="h-[40vh] min-h-0 border rounded-md">
+          <div className="p-2">
           {filtered.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-8">Sin ejercicios.</p>
           ) : (
@@ -126,9 +127,10 @@ export function ExercisePicker({ open, onOpenChange, onAdd, title = "Añadir eje
               })}
             </div>
           )}
+          </div>
         </ScrollArea>
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="shrink-0 grid grid-cols-2 md:grid-cols-5 gap-2">
           <div className="space-y-1"><Label className="text-xs">Series</Label><Input type="number" value={params.series} onChange={(e) => setParams({ ...params, series: Number(e.target.value) })} /></div>
           <div className="space-y-1"><Label className="text-xs">Reps</Label><Input value={params.repeticiones} onChange={(e) => setParams({ ...params, repeticiones: e.target.value })} /></div>
           <div className="space-y-1"><Label className="text-xs">Tiempo</Label><Input value={params.tiempo} onChange={(e) => setParams({ ...params, tiempo: e.target.value })} placeholder="—" /></div>
@@ -136,7 +138,7 @@ export function ExercisePicker({ open, onOpenChange, onAdd, title = "Añadir eje
           <div className="space-y-1"><Label className="text-xs">Descanso</Label><Input value={params.descanso} onChange={(e) => setParams({ ...params, descanso: e.target.value })} /></div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button onClick={handleAdd} disabled={!selectedId}>Añadir</Button>
         </DialogFooter>
