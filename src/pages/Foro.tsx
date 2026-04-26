@@ -184,14 +184,52 @@ export default function Foro() {
         <div className="space-y-4">
           <Button variant="ghost" onClick={() => setSelected(null)}>← Volver</Button>
           <Card>
-            <CardHeader><CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle>
+              {isSuperadmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm"><Trash2 className="h-4 w-4 mr-2" /> Eliminar hilo</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar este hilo?</AlertDialogTitle>
+                      <AlertDialogDescription>Se eliminarán también todos sus mensajes. Esta acción no se puede deshacer.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteThread(selected.id)}>Eliminar</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </CardHeader>
             <CardContent className="space-y-3">
               {messages.map(m => {
                 const author = profilesMap[m.user_id];
                 return (
-                  <div key={m.id} className="border-l-2 border-primary pl-3 py-1">
-                    <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
-                    <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
+                  <div key={m.id} className="border-l-2 border-primary pl-3 py-1 flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
+                      <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
+                    </div>
+                    {isSuperadmin && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive shrink-0"><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar este mensaje?</AlertDialogTitle>
+                            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMessage(m.id)}>Eliminar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </div>
                 );
               })}
