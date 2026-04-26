@@ -198,7 +198,32 @@ export default function Simulacros() {
     load();
   };
 
-  const visibleTemplates = templates.filter((t) => isCoach || t.status === "activo");
+  const activeTemplates = templates.filter((t) => t.status === "activo");
+  const archivedTemplates = templates.filter((t) => t.status === "archivado");
+
+  const renderTplCard = (t: any) => (
+    <Card key={t.id} className={t.status !== "activo" ? "opacity-70" : ""}>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="brand-title text-xl flex items-center gap-2"><Target className="h-5 w-5 text-primary" />{t.nombre}</CardTitle>
+          <div className="flex gap-1 items-center">
+            <Badge variant="outline">{t.sexo}</Badge>
+            {t.status !== "activo" && <Badge variant="secondary">{t.status}</Badge>}
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground">{t.oposiciones?.nombre} · {t.simulacro_template_marks?.length ?? 0} pruebas</p>
+      </CardHeader>
+      <CardContent className="flex gap-2">
+        <Button size="sm" onClick={() => startRun(t)} disabled={t.status !== "activo"}>Registrar resultado</Button>
+        {isCoach && t.status === "activo" && (
+          <Button size="sm" variant="outline" onClick={() => archiveTpl(t.id)} title="Archivar"><Archive className="h-3 w-3" /></Button>
+        )}
+        {isCoach && t.status === "archivado" && (
+          <Button size="sm" variant="outline" onClick={() => unarchiveTpl(t.id)} title="Desarchivar"><ArchiveRestore className="h-3 w-3 mr-1" /> Desarchivar</Button>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div>
