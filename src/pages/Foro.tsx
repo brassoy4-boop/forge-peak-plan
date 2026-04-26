@@ -16,7 +16,8 @@ import { toast } from "sonner";
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
 export default function Foro() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
+  const isSuperadmin = roles.includes("superadmin");
   const [threads, setThreads] = useState<any[]>([]);
   const [oposiciones, setOposiciones] = useState<any[]>([]);
   const [filterOpo, setFilterOpo] = useState<string>("__all__");
