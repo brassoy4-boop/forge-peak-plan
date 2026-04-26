@@ -95,9 +95,29 @@ export default function Foro() {
     if (!user || !selected || !reply.trim()) return;
     const content = reply;
     setReply("");
-    const { error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: content });
+    const { data, error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: content }).select().single();
     if (error) { toast.error(error.message); setReply(content); return; }
+    // Optimista: añadir el mensaje localmente por si realtime tarda o no llega
+    if (data) setMessages((prev) => prev.some((m) => m.id === data.id) ? prev : [...prev, data]);
     await supabase.from("forum_threads").update({ updated_at: new Date().toISOString() }).eq("id", selected.id);
+    loadMessages(selected.id);
+  };
+
+  const deleteThread = async (id: string) => {
+    // Borrar mensajes del hilo primero (no hay cascade)
+    await supabase.from("forum_messages").delete().eq("thread_id", id);
+    const { error } = await supabase.from("forum_threads").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Hilo eliminado");
+    setSelected(null);
+    loadThreads();
+  };
+
+  const deleteMessage = async (id: string) => {
+    const { error } = await supabase.from("forum_messages").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    toast.success("Mensaje eliminado");
   };
 
   return (
