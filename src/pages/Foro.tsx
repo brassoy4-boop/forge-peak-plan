@@ -9,13 +9,15 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Plus } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { MessageSquare, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
 export default function Foro() {
-  const { user } = useAuth();
+  const { user, roles } = useAuth();
+  const isSuperadmin = roles.includes("superadmin");
   const [threads, setThreads] = useState<any[]>([]);
   const [oposiciones, setOposiciones] = useState<any[]>([]);
   const [filterOpo, setFilterOpo] = useState<string>("__all__");
@@ -93,9 +95,29 @@ export default function Foro() {
     if (!user || !selected || !reply.trim()) return;
     const content = reply;
     setReply("");
-    const { error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: content });
+    const { data, error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: content }).select().single();
     if (error) { toast.error(error.message); setReply(content); return; }
+    // Optimista: añadir el mensaje localmente por si realtime tarda o no llega
+    if (data) setMessages((prev) => prev.some((m) => m.id === data.id) ? prev : [...prev, data]);
     await supabase.from("forum_threads").update({ updated_at: new Date().toISOString() }).eq("id", selected.id);
+    loadMessages(selected.id);
+  };
+
+  const deleteThread = async (id: string) => {
+    // Borrar mensajes del hilo primero (no hay cascade)
+    await supabase.from("forum_messages").delete().eq("thread_id", id);
+    const { error } = await supabase.from("forum_threads").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Hilo eliminado");
+    setSelected(null);
+    loadThreads();
+  };
+
+  const deleteMessage = async (id: string) => {
+    const { error } = await supabase.from("forum_messages").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    setMessages((prev) => prev.filter((m) => m.id !== id));
+    toast.success("Mensaje eliminado");
   };
 
   return (
@@ -141,17 +163,36 @@ export default function Foro() {
           {threads.map(t => {
             const author = profilesMap[t.created_by];
             return (
-              <Card key={t.id} className="cursor-pointer hover:border-primary" onClick={() => setSelected(t)}>
+              <Card key={t.id} className="hover:border-primary">
                 <CardContent className="py-3 flex items-center gap-3">
-                  <MessageSquare className="h-5 w-5 text-primary shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{t.titulo}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {author ? `${author.nombre} ${author.apellidos}` : "—"}
-                      {t.oposiciones?.nombre && <span> · {t.oposiciones.nombre}</span>}
-                      <span> · {new Date(t.updated_at).toLocaleDateString("es-ES")}</span>
+                  <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => setSelected(t)}>
+                    <MessageSquare className="h-5 w-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{t.titulo}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {author ? `${author.nombre} ${author.apellidos}` : "—"}
+                        {t.oposiciones?.nombre && <span> · {t.oposiciones.nombre}</span>}
+                        <span> · {new Date(t.updated_at).toLocaleDateString("es-ES")}</span>
+                      </div>
                     </div>
                   </div>
+                  {isSuperadmin && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-destructive shrink-0" onClick={(e) => e.stopPropagation()}><Trash2 className="h-4 w-4" /></Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar este hilo?</AlertDialogTitle>
+                          <AlertDialogDescription>Se eliminarán también todos sus mensajes. Esta acción no se puede deshacer.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteThread(t.id)}>Eliminar</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -162,14 +203,52 @@ export default function Foro() {
         <div className="space-y-4">
           <Button variant="ghost" onClick={() => setSelected(null)}>← Volver</Button>
           <Card>
-            <CardHeader><CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle>
+              {isSuperadmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm"><Trash2 className="h-4 w-4 mr-2" /> Eliminar hilo</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>¿Eliminar este hilo?</AlertDialogTitle>
+                      <AlertDialogDescription>Se eliminarán también todos sus mensajes. Esta acción no se puede deshacer.</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteThread(selected.id)}>Eliminar</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </CardHeader>
             <CardContent className="space-y-3">
               {messages.map(m => {
                 const author = profilesMap[m.user_id];
                 return (
-                  <div key={m.id} className="border-l-2 border-primary pl-3 py-1">
-                    <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
-                    <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
+                  <div key={m.id} className="border-l-2 border-primary pl-3 py-1 flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
+                      <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
+                    </div>
+                    {isSuperadmin && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive shrink-0"><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar este mensaje?</AlertDialogTitle>
+                            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMessage(m.id)}>Eliminar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </div>
                 );
               })}
