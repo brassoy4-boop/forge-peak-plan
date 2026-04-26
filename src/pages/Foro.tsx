@@ -163,17 +163,36 @@ export default function Foro() {
           {threads.map(t => {
             const author = profilesMap[t.created_by];
             return (
-              <Card key={t.id} className="cursor-pointer hover:border-primary" onClick={() => setSelected(t)}>
+              <Card key={t.id} className="hover:border-primary">
                 <CardContent className="py-3 flex items-center gap-3">
-                  <MessageSquare className="h-5 w-5 text-primary shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{t.titulo}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {author ? `${author.nombre} ${author.apellidos}` : "—"}
-                      {t.oposiciones?.nombre && <span> · {t.oposiciones.nombre}</span>}
-                      <span> · {new Date(t.updated_at).toLocaleDateString("es-ES")}</span>
+                  <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => setSelected(t)}>
+                    <MessageSquare className="h-5 w-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{t.titulo}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {author ? `${author.nombre} ${author.apellidos}` : "—"}
+                        {t.oposiciones?.nombre && <span> · {t.oposiciones.nombre}</span>}
+                        <span> · {new Date(t.updated_at).toLocaleDateString("es-ES")}</span>
+                      </div>
                     </div>
                   </div>
+                  {isSuperadmin && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-destructive shrink-0" onClick={(e) => e.stopPropagation()}><Trash2 className="h-4 w-4" /></Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Eliminar este hilo?</AlertDialogTitle>
+                          <AlertDialogDescription>Se eliminarán también todos sus mensajes. Esta acción no se puede deshacer.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteThread(t.id)}>Eliminar</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
                 </CardContent>
               </Card>
             );
