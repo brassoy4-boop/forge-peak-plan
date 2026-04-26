@@ -88,6 +88,11 @@ export default function Simulacros() {
     toast.success("Plantilla archivada"); load();
   };
 
+  const unarchiveTpl = async (id: string) => {
+    await supabase.from("simulacro_templates").update({ status: "activo" }).eq("id", id);
+    toast.success("Plantilla restaurada"); load();
+  };
+
   const startRun = (tpl: any) => {
     setRunning(tpl);
     setResults({}); setObs(""); setTargetUserId(user?.id ?? "");
