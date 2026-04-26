@@ -334,29 +334,27 @@ export default function Simulacros() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {visibleTemplates.map((t) => (
-          <Card key={t.id} className={t.status !== "activo" ? "opacity-60" : ""}>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-2">
-                <CardTitle className="brand-title text-xl flex items-center gap-2"><Target className="h-5 w-5 text-primary" />{t.nombre}</CardTitle>
-                <div className="flex gap-1 items-center">
-                  <Badge variant="outline">{t.sexo}</Badge>
-                  {t.status !== "activo" && <Badge variant="secondary">{t.status}</Badge>}
-                </div>
-              </div>
-              <p className="text-sm text-muted-foreground">{t.oposiciones?.nombre} · {t.simulacro_template_marks?.length ?? 0} pruebas</p>
-            </CardHeader>
-            <CardContent className="flex gap-2">
-              <Button size="sm" onClick={() => startRun(t)} disabled={t.status !== "activo"}>Registrar resultado</Button>
-              {isCoach && t.status === "activo" && (
-                <Button size="sm" variant="outline" onClick={() => archiveTpl(t.id)}><Archive className="h-3 w-3" /></Button>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-        {visibleTemplates.length === 0 && <p className="col-span-full text-center text-muted-foreground py-8">No hay plantillas todavía.</p>}
-      </div>
+      <Tabs defaultValue="activos" className="w-full">
+        <TabsList>
+          <TabsTrigger value="activos">Activos ({activeTemplates.length})</TabsTrigger>
+          {isCoach && <TabsTrigger value="archivados">Archivados ({archivedTemplates.length})</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="activos">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeTemplates.map(renderTplCard)}
+            {activeTemplates.length === 0 && <p className="col-span-full text-center text-muted-foreground py-8">No hay plantillas activas.</p>}
+          </div>
+        </TabsContent>
+        {isCoach && (
+          <TabsContent value="archivados">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {archivedTemplates.map(renderTplCard)}
+              {archivedTemplates.length === 0 && <p className="col-span-full text-center text-muted-foreground py-8">No hay plantillas archivadas.</p>}
+            </div>
+          </TabsContent>
+        )}
+      </Tabs>
+
 
       <div className="mt-8">
         <h2 className="brand-title text-2xl mb-3">Histórico</h2>
