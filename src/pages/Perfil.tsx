@@ -126,6 +126,20 @@ export default function Perfil() {
           </Card>
 
           <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Privacidad</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm">Recibir mensajes de otros usuarios</Label>
+                  <p className="text-xs text-muted-foreground">Si lo desactivas, otros usuarios no podrán iniciar conversaciones contigo. Tus entrenadores y el superadmin siempre podrán escribirte.</p>
+                </div>
+                <Switch checked={!!form.acepta_mensajes_usuarios} onCheckedChange={(v) => setForm({ ...form, acepta_mensajes_usuarios: v })} />
+              </div>
+              <Button size="sm" variant="outline" onClick={save} className="w-full">Guardar privacidad</Button>
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> Cambiar contraseña</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-2"><Label>Nueva contraseña</Label><Input type="password" value={pwd.a} onChange={(e) => setPwd({ ...pwd, a: e.target.value })} /></div>
