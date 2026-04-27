@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploader } from "@/components/FileUploader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, KeyRound } from "lucide-react";
+import { Loader2, KeyRound, MessageSquare } from "lucide-react";
 
 export default function Perfil() {
   const { user } = useAuth();
@@ -18,7 +19,7 @@ export default function Perfil() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<any>({
     nombre: "", apellidos: "", telefono: "", fecha_nacimiento: "",
-    sexo: "", peso: "", altura: "", avatar_url: "",
+    sexo: "", peso: "", altura: "", avatar_url: "", acepta_mensajes_usuarios: true,
   });
   const [pwd, setPwd] = useState({ a: "", b: "" });
 
