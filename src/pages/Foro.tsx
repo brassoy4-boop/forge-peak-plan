@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { MessageSquare, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2, Reply, X } from "lucide-react";
 import { toast } from "sonner";
 
 interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
@@ -27,6 +27,7 @@ export default function Foro() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ titulo: "", contenido: "", oposicion_id: "__none__" });
   const [reply, setReply] = useState("");
+  const [replyTo, setReplyTo] = useState<any | null>(null); // mensaje al que se responde
 
   const loadOpos = async () => {
     const { data } = await supabase.from("oposiciones").select("id, nombre").order("nombre");
@@ -94,17 +95,36 @@ export default function Foro() {
   const sendReply = async () => {
     if (!user || !selected || !reply.trim()) return;
     const content = reply;
+    const parentMsg = replyTo;
     setReply("");
-    const { data, error } = await supabase.from("forum_messages").insert({ thread_id: selected.id, user_id: user.id, contenido: content }).select().single();
-    if (error) { toast.error(error.message); setReply(content); return; }
-    // Optimista: añadir el mensaje localmente por si realtime tarda o no llega
+    setReplyTo(null);
+    const payload: any = { thread_id: selected.id, user_id: user.id, contenido: content };
+    if (parentMsg?.id) payload.parent_id = parentMsg.id;
+    const { data, error } = await supabase.from("forum_messages").insert(payload).select().single();
+    if (error) { toast.error(error.message); setReply(content); setReplyTo(parentMsg); return; }
     if (data) setMessages((prev) => prev.some((m) => m.id === data.id) ? prev : [...prev, data]);
     await supabase.from("forum_threads").update({ updated_at: new Date().toISOString() }).eq("id", selected.id);
+
+    // Notificar al destinatario apropiado
+    const notifyIds: string[] = [];
+    if (parentMsg && parentMsg.user_id !== user.id) {
+      notifyIds.push(parentMsg.user_id);
+    } else if (!parentMsg && selected.created_by && selected.created_by !== user.id) {
+      notifyIds.push(selected.created_by);
+    }
+    if (notifyIds.length) {
+      await supabase.from("notifications").insert(notifyIds.map((uid) => ({
+        user_id: uid,
+        tipo: "foro",
+        titulo: parentMsg ? "Han respondido a tu mensaje" : "Nueva respuesta en tu hilo",
+        contenido: `${selected.titulo}: ${content.slice(0, 80)}`,
+        link: "/app/foro",
+      })));
+    }
     loadMessages(selected.id);
   };
 
   const deleteThread = async (id: string) => {
-    // Borrar mensajes del hilo primero (no hay cascade)
     await supabase.from("forum_messages").delete().eq("thread_id", id);
     const { error } = await supabase.from("forum_threads").delete().eq("id", id);
     if (error) return toast.error(error.message);
@@ -119,6 +139,8 @@ export default function Foro() {
     setMessages((prev) => prev.filter((m) => m.id !== id));
     toast.success("Mensaje eliminado");
   };
+
+  const messagesById = Object.fromEntries(messages.map((m) => [m.id, m]));
 
   return (
     <div>
@@ -201,7 +223,7 @@ export default function Foro() {
         </div>
       ) : (
         <div className="space-y-4">
-          <Button variant="ghost" onClick={() => setSelected(null)}>← Volver</Button>
+          <Button variant="ghost" onClick={() => { setSelected(null); setReplyTo(null); }}>← Volver</Button>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <CardTitle className="brand-title text-2xl">{selected.titulo}</CardTitle>
@@ -226,11 +248,21 @@ export default function Foro() {
             <CardContent className="space-y-3">
               {messages.map(m => {
                 const author = profilesMap[m.user_id];
+                const parent = m.parent_id ? messagesById[m.parent_id] : null;
+                const parentAuthor = parent ? profilesMap[parent.user_id] : null;
                 return (
-                  <div key={m.id} className="border-l-2 border-primary pl-3 py-1 flex items-start justify-between gap-2">
+                  <div key={m.id} className={`border-l-2 border-primary pl-3 py-1 flex items-start justify-between gap-2 ${parent ? "ml-6" : ""}`}>
                     <div className="flex-1 min-w-0">
+                      {parent && (
+                        <div className="text-xs text-muted-foreground italic border-l-2 border-muted pl-2 mb-1">
+                          ↳ Responde a {parentAuthor ? `${parentAuthor.nombre} ${parentAuthor.apellidos}` : "—"}: <span className="opacity-70">{parent.contenido.slice(0, 60)}{parent.contenido.length > 60 ? "…" : ""}</span>
+                        </div>
+                      )}
                       <div className="text-xs text-muted-foreground">{author ? `${author.nombre} ${author.apellidos}` : "—"} · {new Date(m.created_at).toLocaleString("es-ES")}</div>
                       <div className="text-sm whitespace-pre-wrap">{m.contenido}</div>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 mt-1 text-xs" onClick={() => setReplyTo(m)}>
+                        <Reply className="h-3 w-3 mr-1" /> Responder
+                      </Button>
                     </div>
                     {isSuperadmin && (
                       <AlertDialog>
@@ -253,8 +285,17 @@ export default function Foro() {
                 );
               })}
               <div className="space-y-2 pt-3 border-t">
-                <Textarea placeholder="Escribe una respuesta..." value={reply} onChange={(e) => setReply(e.target.value)} />
-                <Button onClick={sendReply} disabled={!reply.trim()}>Responder</Button>
+                {replyTo && (
+                  <div className="flex items-start justify-between bg-muted/40 rounded p-2 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">Respondiendo a {profilesMap[replyTo.user_id] ? `${profilesMap[replyTo.user_id].nombre} ${profilesMap[replyTo.user_id].apellidos}` : "—"}</div>
+                      <div className="text-muted-foreground line-clamp-2">{replyTo.contenido}</div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setReplyTo(null)}><X className="h-3 w-3" /></Button>
+                  </div>
+                )}
+                <Textarea placeholder={replyTo ? "Escribe tu respuesta..." : "Escribe un mensaje al hilo..."} value={reply} onChange={(e) => setReply(e.target.value)} />
+                <Button onClick={sendReply} disabled={!reply.trim()}>{replyTo ? "Responder" : "Publicar"}</Button>
               </div>
             </CardContent>
           </Card>
