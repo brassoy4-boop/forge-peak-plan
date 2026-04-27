@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, UserCheck, Loader2, UserMinus, Search, Pencil, Shield } from "lucide-react";
+import { Plus, Loader2, Search, Pencil, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Usuarios() {
@@ -35,6 +35,8 @@ export default function Usuarios() {
   // Editar perfil
   const [editing, setEditing] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ nombre: "", apellidos: "", email: "", telefono: "", sexo: "masculino" as "masculino" | "femenino" | "unisex", peso: "", altura: "", fecha_nacimiento: "" });
+  const [newPassword, setNewPassword] = useState("");
+  const [resettingPwd, setResettingPwd] = useState(false);
 
   // Confirmación desvincular oposición
   const [unlinkConfirm, setUnlinkConfirm] = useState<{ id: string; nombre: string } | null>(null);
@@ -77,12 +79,26 @@ export default function Usuarios() {
 
   const openEdit = (p: any) => {
     setEditing(p);
+    setNewPassword("");
     setEditForm({
       nombre: p.nombre ?? "", apellidos: p.apellidos ?? "", email: p.email ?? "",
       telefono: p.telefono ?? "", sexo: (p.sexo ?? "masculino") as any,
       peso: p.peso?.toString() ?? "", altura: p.altura?.toString() ?? "",
       fecha_nacimiento: p.fecha_nacimiento ?? "",
     });
+  };
+
+  const resetPassword = async () => {
+    if (!editing) return;
+    if (!newPassword || newPassword.length < 6) return toast.error("Mínimo 6 caracteres");
+    setResettingPwd(true);
+    const { data, error } = await supabase.functions.invoke("admin-reset-password", {
+      body: { user_id: editing.user_id, password: newPassword },
+    });
+    setResettingPwd(false);
+    if (error || (data as any)?.error) return toast.error((data as any)?.error ?? error?.message ?? "Error");
+    toast.success("Contraseña actualizada");
+    setNewPassword("");
   };
 
   const saveEdit = async () => {
