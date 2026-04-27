@@ -224,16 +224,6 @@ export default function Usuarios() {
                   <TableHead>Sexo</TableHead>
                   <TableHead>Oposiciones</TableHead>
                   <TableHead>Rutinas activas</TableHead>
-                  <TableHead>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="cursor-help underline decoration-dotted">Asignación</span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        Vincula un deportista a ti como entrenador. Los entrenadores solo ven y gestionan datos (diario, simulacros, rutinas) de los deportistas que tienen asignados.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -241,7 +231,7 @@ export default function Usuarios() {
                 {filtered.map((p) => {
                   const opos = userOpos.filter(uo => uo.user_id === p.user_id);
                   const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id);
-                  const mine = isMine(p.user_id);
+                  
                   const roles = rolesOf(p.user_id);
                   const mainRole = roles.includes("superadmin") ? "superadmin" : roles.includes("entrenador") ? "entrenador" : "usuario";
                   return (
@@ -291,7 +281,6 @@ export default function Usuarios() {
                           {userRoutinesList.length === 0 && "—"}
                         </div>
                       </TableCell>
-                      <TableCell>{mine ? <Badge>Asignado a ti</Badge> : <Badge variant="outline">—</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1 whitespace-nowrap">
                         <Button variant="outline" size="sm" onClick={() => openEdit(p)} title="Editar perfil"><Pencil className="h-3 w-3" /></Button>
                         <Select onValueChange={(v) => linkOpo(p.user_id, v)}>
@@ -299,21 +288,6 @@ export default function Usuarios() {
                           <SelectContent>{oposiciones.map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}</SelectContent>
                         </Select>
                         <Button variant="outline" size="sm" onClick={() => setRoutineDialog({ open: true, userId: p.user_id })}>+ Rutina</Button>
-                        {mine ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => unassign(p.user_id)}><UserMinus className="h-3 w-3" /></Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Desasignar de mí (dejaré de ver sus datos)</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => assignToCoach(p.user_id)}><UserCheck className="h-3 w-3" /></Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Asignar a mí como entrenador</TooltipContent>
-                          </Tooltip>
-                        )}
                       </TableCell>
                     </TableRow>
                   );
