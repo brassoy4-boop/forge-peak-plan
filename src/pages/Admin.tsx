@@ -8,17 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Save, ShieldAlert, Plus, Loader2 } from "lucide-react";
 
 export default function Admin() {
-  const { user } = useAuth();
   const [pin, setPin] = useState("");
   const [profiles, setProfiles] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
-  const [newRole, setNewRole] = useState<Record<string, string>>({});
   const [openCoach, setOpenCoach] = useState(false);
   const [coachForm, setCoachForm] = useState({ email: "", password: "", nombre: "", apellidos: "" });
   const [creating, setCreating] = useState(false);
@@ -40,16 +37,11 @@ export default function Admin() {
     toast.success("PIN actualizado");
   };
 
-  const assignRole = async (userId: string, role: string) => {
-    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+  const setRole = async (userId: string, role: "usuario" | "entrenador" | "superadmin") => {
+    await supabase.from("user_roles").delete().eq("user_id", userId);
+    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
     if (error) return toast.error(error.message);
-    toast.success("Rol asignado"); load();
-  };
-
-  const removeRole = async (id: string) => {
-    const { error } = await supabase.from("user_roles").delete().eq("id", id);
-    if (error) return toast.error(error.message);
-    load();
+    toast.success(`Rol ${role} asignado`); load();
   };
 
   const createCoach = async () => {
@@ -57,21 +49,23 @@ export default function Admin() {
     setCreating(true);
     const { data, error } = await supabase.functions.invoke("create-user", {
       body: {
-        email: coachForm.email,
-        password: coachForm.password,
-        nombre: coachForm.nombre,
-        apellidos: coachForm.apellidos,
-        role: "entrenador",
+        email: coachForm.email, password: coachForm.password,
+        nombre: coachForm.nombre, apellidos: coachForm.apellidos, role: "entrenador",
       },
     });
     setCreating(false);
-    if (error || (data as any)?.error) {
-      return toast.error((data as any)?.error ?? error?.message ?? "Error");
-    }
+    if (error || (data as any)?.error) return toast.error((data as any)?.error ?? error?.message ?? "Error");
     toast.success("Entrenador creado");
     setOpenCoach(false);
     setCoachForm({ email: "", password: "", nombre: "", apellidos: "" });
     load();
+  };
+
+  const mainRoleOf = (uid: string) => {
+    const list = roles.filter((x) => x.user_id === uid).map((x) => x.role);
+    if (list.includes("superadmin")) return "superadmin";
+    if (list.includes("entrenador")) return "entrenador";
+    return "usuario";
   };
 
   return (
@@ -95,9 +89,7 @@ export default function Admin() {
           </CardHeader>
           <CardContent>
             <Dialog open={openCoach} onOpenChange={setOpenCoach}>
-              <DialogTrigger asChild>
-                <Button><Plus className="mr-2 h-4 w-4" /> Nuevo entrenador</Button>
-              </DialogTrigger>
+              <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Nuevo entrenador</Button></DialogTrigger>
               <DialogContent>
                 <DialogHeader><DialogTitle>Crear entrenador</DialogTitle></DialogHeader>
                 <div className="space-y-3">
@@ -120,36 +112,29 @@ export default function Admin() {
         </Card>
       </div>
       <Card>
-        <CardHeader><CardTitle>Roles y permisos</CardTitle><CardDescription>Click en un rol para quitarlo.</CardDescription></CardHeader>
+        <CardHeader>
+          <CardTitle>Roles y permisos</CardTitle>
+          <CardDescription>Cada usuario solo puede tener un rol. Cámbialo desde el selector.</CardDescription>
+        </CardHeader>
         <CardContent>
           <Table>
-            <TableHeader><TableRow><TableHead>Usuario</TableHead><TableHead>Email</TableHead><TableHead>Roles</TableHead><TableHead className="text-right">Asignar</TableHead></TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Usuario</TableHead><TableHead>Email</TableHead><TableHead>Rol</TableHead></TableRow></TableHeader>
             <TableBody>
-              {profiles.map(p => {
-                const r = roles.filter(x => x.user_id === p.user_id);
+              {profiles.map((p) => {
+                const role = mainRoleOf(p.user_id);
                 return (
                   <TableRow key={p.id}>
                     <TableCell className="font-medium">{p.nombre} {p.apellidos}</TableCell>
                     <TableCell className="text-sm">{p.email}</TableCell>
-                    <TableCell className="space-x-1">
-                      {r.map(x => (
-                        <Badge key={x.id} variant={x.role === "superadmin" ? "destructive" : x.role === "entrenador" ? "default" : "secondary"} className="cursor-pointer" onClick={() => removeRole(x.id)} title="Click para quitar">
-                          {x.role}
-                        </Badge>
-                      ))}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="inline-flex gap-1">
-                        <Select value={newRole[p.user_id] ?? ""} onValueChange={(v) => setNewRole({ ...newRole, [p.user_id]: v })}>
-                          <SelectTrigger className="w-32"><SelectValue placeholder="Rol..." /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="usuario">usuario</SelectItem>
-                            <SelectItem value="entrenador">entrenador</SelectItem>
-                            <SelectItem value="superadmin">superadmin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button size="sm" disabled={!newRole[p.user_id]} onClick={() => assignRole(p.user_id, newRole[p.user_id])}>+</Button>
-                      </div>
+                    <TableCell>
+                      <Select value={role} onValueChange={(v) => setRole(p.user_id, v as any)}>
+                        <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="usuario">Usuario</SelectItem>
+                          <SelectItem value="entrenador">Entrenador</SelectItem>
+                          <SelectItem value="superadmin">Superadmin</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                   </TableRow>
                 );

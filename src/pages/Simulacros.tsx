@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Target, ChevronDown, ChevronUp, Archive, ArchiveRestore, X } from "lucide-react";
+import { Plus, Target, ChevronDown, ChevronUp, Archive, ArchiveRestore, X, Trash2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { canExecuteSimulacro, isValidTime, isValidNumber, type Sexo } from "@/lib/validators";
@@ -22,6 +23,15 @@ interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 export default function Simulacros() {
   const { user, primaryRole } = useAuth();
   const isCoach = primaryRole === "entrenador" || primaryRole === "superadmin";
+  const isSuperadmin = primaryRole === "superadmin";
+
+  const deleteExecution = async (execId: string) => {
+    await supabase.from("simulacro_results").delete().eq("execution_id", execId);
+    const { error } = await supabase.from("simulacro_executions").delete().eq("id", execId);
+    if (error) return toast.error(error.message);
+    toast.success("Ejecución eliminada");
+    load();
+  };
   const [templates, setTemplates] = useState<any[]>([]);
   const [oposiciones, setOposiciones] = useState<any[]>([]);
   const [marks, setMarks] = useState<any[]>([]);
@@ -387,8 +397,25 @@ export default function Simulacros() {
                       ))}
                       {e.observaciones && <p className="text-xs text-muted-foreground pt-2 italic">{e.observaciones}</p>}
                       {(isCoach || e.user_id === user?.id) && (
-                        <div className="pt-2">
+                        <div className="pt-2 flex gap-2">
                           <Button size="sm" variant="outline" onClick={() => startEditExec(e)}>Editar</Button>
+                          {isSuperadmin && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="sm" variant="destructive"><Trash2 className="h-3 w-3 mr-1" /> Eliminar</Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>¿Eliminar esta ejecución?</AlertDialogTitle>
+                                  <AlertDialogDescription>Se eliminará la ejecución y todos sus resultados. Esta acción no se puede deshacer.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteExecution(e.id)}>Eliminar</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                       )}
                     </div>

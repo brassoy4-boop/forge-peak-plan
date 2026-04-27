@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { FileUploader } from "@/components/FileUploader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Loader2, KeyRound } from "lucide-react";
+import { Loader2, KeyRound, MessageSquare } from "lucide-react";
 
 export default function Perfil() {
   const { user } = useAuth();
@@ -18,7 +19,7 @@ export default function Perfil() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<any>({
     nombre: "", apellidos: "", telefono: "", fecha_nacimiento: "",
-    sexo: "", peso: "", altura: "", avatar_url: "",
+    sexo: "", peso: "", altura: "", avatar_url: "", acepta_mensajes_usuarios: true,
   });
   const [pwd, setPwd] = useState({ a: "", b: "" });
 
@@ -34,6 +35,7 @@ export default function Perfil() {
         peso: data.peso?.toString() ?? "",
         altura: data.altura?.toString() ?? "",
         avatar_url: (data as any).avatar_url ?? "",
+        acepta_mensajes_usuarios: (data as any).acepta_mensajes_usuarios ?? true,
       });
       setLoading(false);
     });
@@ -51,6 +53,7 @@ export default function Perfil() {
       peso: form.peso ? Number(form.peso) : null,
       altura: form.altura ? Number(form.altura) : null,
       avatar_url: form.avatar_url || null,
+      acepta_mensajes_usuarios: !!form.acepta_mensajes_usuarios,
     } as any).eq("user_id", user.id);
     setSaving(false);
     if (error) toast.error(error.message);
@@ -119,6 +122,20 @@ export default function Perfil() {
                 preview={false}
               />
               <Button size="sm" variant="outline" onClick={save} className="w-full">Guardar foto</Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-4 w-4" /> Privacidad</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <Label className="text-sm">Recibir mensajes de otros usuarios</Label>
+                  <p className="text-xs text-muted-foreground">Si lo desactivas, otros usuarios no podrán iniciar conversaciones contigo. Tus entrenadores y el superadmin siempre podrán escribirte.</p>
+                </div>
+                <Switch checked={!!form.acepta_mensajes_usuarios} onCheckedChange={(v) => setForm({ ...form, acepta_mensajes_usuarios: v })} />
+              </div>
+              <Button size="sm" variant="outline" onClick={save} className="w-full">Guardar privacidad</Button>
             </CardContent>
           </Card>
 

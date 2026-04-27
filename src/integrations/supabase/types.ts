@@ -281,6 +281,7 @@ export type Database = {
           contenido: string
           created_at: string
           id: string
+          parent_id: string | null
           thread_id: string
           user_id: string
         }
@@ -288,6 +289,7 @@ export type Database = {
           contenido: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           thread_id: string
           user_id: string
         }
@@ -295,10 +297,18 @@ export type Database = {
           contenido?: string
           created_at?: string
           id?: string
+          parent_id?: string | null
           thread_id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "forum_messages_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "forum_messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "forum_messages_thread_id_fkey"
             columns: ["thread_id"]
@@ -719,6 +729,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          acepta_mensajes_usuarios: boolean
           activo: boolean
           altura: number | null
           apellidos: string
@@ -736,6 +747,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          acepta_mensajes_usuarios?: boolean
           activo?: boolean
           altura?: number | null
           apellidos?: string
@@ -753,6 +765,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          acepta_mensajes_usuarios?: boolean
           activo?: boolean
           altura?: number | null
           apellidos?: string

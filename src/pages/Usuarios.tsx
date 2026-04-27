@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, UserCheck, Loader2, UserMinus, Search, Pencil, Shield } from "lucide-react";
+import { Plus, Loader2, Search, Pencil, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Usuarios() {
@@ -35,6 +35,8 @@ export default function Usuarios() {
   // Editar perfil
   const [editing, setEditing] = useState<any | null>(null);
   const [editForm, setEditForm] = useState({ nombre: "", apellidos: "", email: "", telefono: "", sexo: "masculino" as "masculino" | "femenino" | "unisex", peso: "", altura: "", fecha_nacimiento: "" });
+  const [newPassword, setNewPassword] = useState("");
+  const [resettingPwd, setResettingPwd] = useState(false);
 
   // Confirmación desvincular oposición
   const [unlinkConfirm, setUnlinkConfirm] = useState<{ id: string; nombre: string } | null>(null);
@@ -77,12 +79,26 @@ export default function Usuarios() {
 
   const openEdit = (p: any) => {
     setEditing(p);
+    setNewPassword("");
     setEditForm({
       nombre: p.nombre ?? "", apellidos: p.apellidos ?? "", email: p.email ?? "",
       telefono: p.telefono ?? "", sexo: (p.sexo ?? "masculino") as any,
       peso: p.peso?.toString() ?? "", altura: p.altura?.toString() ?? "",
       fecha_nacimiento: p.fecha_nacimiento ?? "",
     });
+  };
+
+  const resetPassword = async () => {
+    if (!editing) return;
+    if (!newPassword || newPassword.length < 6) return toast.error("Mínimo 6 caracteres");
+    setResettingPwd(true);
+    const { data, error } = await supabase.functions.invoke("admin-reset-password", {
+      body: { user_id: editing.user_id, password: newPassword },
+    });
+    setResettingPwd(false);
+    if (error || (data as any)?.error) return toast.error((data as any)?.error ?? error?.message ?? "Error");
+    toast.success("Contraseña actualizada");
+    setNewPassword("");
   };
 
   const saveEdit = async () => {
@@ -108,20 +124,6 @@ export default function Usuarios() {
     if (error) return toast.error(error.message);
     toast.success(`Rol ${role} asignado`);
     load();
-  };
-
-  const assignToCoach = async (userId: string) => {
-    if (!user) return;
-    const { error } = await supabase.from("coach_assignments").insert({ coach_id: user.id, user_id: userId });
-    if (error) return toast.error(error.message);
-    toast.success("Asignado a ti"); load();
-  };
-
-  const unassign = async (userId: string) => {
-    if (!user) return;
-    const { error } = await supabase.from("coach_assignments").delete().eq("coach_id", user.id).eq("user_id", userId);
-    if (error) return toast.error(error.message);
-    toast.success("Desasignado"); load();
   };
 
   const linkOpo = async (userId: string, opoId: string) => {
@@ -161,7 +163,6 @@ export default function Usuarios() {
     load();
   };
 
-  const isMine = (userId: string) => assignments.some(a => a.user_id === userId && a.coach_id === user?.id);
   const rolesOf = (userId: string) => userRoles.filter(r => r.user_id === userId).map(r => r.role);
 
   const filtered = profiles.filter((p) => {
@@ -223,16 +224,6 @@ export default function Usuarios() {
                   <TableHead>Sexo</TableHead>
                   <TableHead>Oposiciones</TableHead>
                   <TableHead>Rutinas activas</TableHead>
-                  <TableHead>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="cursor-help underline decoration-dotted">Asignación</span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        Vincula un deportista a ti como entrenador. Los entrenadores solo ven y gestionan datos (diario, simulacros, rutinas) de los deportistas que tienen asignados.
-                      </TooltipContent>
-                    </Tooltip>
-                  </TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -240,7 +231,7 @@ export default function Usuarios() {
                 {filtered.map((p) => {
                   const opos = userOpos.filter(uo => uo.user_id === p.user_id);
                   const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id);
-                  const mine = isMine(p.user_id);
+                  
                   const roles = rolesOf(p.user_id);
                   const mainRole = roles.includes("superadmin") ? "superadmin" : roles.includes("entrenador") ? "entrenador" : "usuario";
                   return (
@@ -290,7 +281,6 @@ export default function Usuarios() {
                           {userRoutinesList.length === 0 && "—"}
                         </div>
                       </TableCell>
-                      <TableCell>{mine ? <Badge>Asignado a ti</Badge> : <Badge variant="outline">—</Badge>}</TableCell>
                       <TableCell className="text-right space-x-1 whitespace-nowrap">
                         <Button variant="outline" size="sm" onClick={() => openEdit(p)} title="Editar perfil"><Pencil className="h-3 w-3" /></Button>
                         <Select onValueChange={(v) => linkOpo(p.user_id, v)}>
@@ -298,27 +288,12 @@ export default function Usuarios() {
                           <SelectContent>{oposiciones.map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}</SelectContent>
                         </Select>
                         <Button variant="outline" size="sm" onClick={() => setRoutineDialog({ open: true, userId: p.user_id })}>+ Rutina</Button>
-                        {mine ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => unassign(p.user_id)}><UserMinus className="h-3 w-3" /></Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Desasignar de mí (dejaré de ver sus datos)</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="outline" size="sm" onClick={() => assignToCoach(p.user_id)}><UserCheck className="h-3 w-3" /></Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Asignar a mí como entrenador</TooltipContent>
-                          </Tooltip>
-                        )}
                       </TableCell>
                     </TableRow>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">Sin resultados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Sin resultados.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -372,6 +347,20 @@ export default function Usuarios() {
                 <div className="space-y-2"><Label>Altura (cm)</Label><Input type="number" step="0.1" value={editForm.altura} onChange={(e) => setEditForm({ ...editForm, altura: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Nacimiento</Label><Input type="date" value={editForm.fecha_nacimiento} onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })} /></div>
               </div>
+
+              {isSuper && (
+                <div className="border-t pt-3 space-y-2">
+                  <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> Resetear contraseña</Label>
+                  <div className="flex gap-2">
+                    <Input type="password" placeholder="Nueva contraseña (mín. 6)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                    <Button variant="outline" onClick={resetPassword} disabled={resettingPwd || !newPassword}>
+                      {resettingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Asignar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">El usuario podrá iniciar sesión con esta nueva contraseña.</p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>

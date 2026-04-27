@@ -48,12 +48,28 @@ export function useNotifications() {
   }, [user, load]);
 
   const markRead = async (id: string) => {
-    await supabase.from("notifications").update({ leida: true }).eq("id", id);
+    // Optimista: marcar localmente sin esperar al realtime
+    setItems((prev) => prev.map((n) => (n.id === id ? { ...n, leida: true } : n)));
+    const { error } = await supabase.from("notifications").update({ leida: true }).eq("id", id);
+    if (error) {
+      // Rollback si falla
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, leida: false } : n)));
+    }
   };
 
   const markAllRead = async () => {
     if (!user) return;
-    await supabase.from("notifications").update({ leida: true }).eq("user_id", user.id).eq("leida", false);
+    // Optimista
+    setItems((prev) => prev.map((n) => ({ ...n, leida: true })));
+    const { error } = await supabase
+      .from("notifications")
+      .update({ leida: true })
+      .eq("user_id", user.id)
+      .eq("leida", false);
+    if (error) {
+      // Recargar estado real si fallo
+      load();
+    }
   };
 
   const unread = items.filter((n) => !n.leida).length;
@@ -61,7 +77,7 @@ export function useNotifications() {
   return { items, unread, loading, markRead, markAllRead, reload: load };
 }
 
-/** Crea una notificación para otro usuario (uso por cliente con RLS permisivo de insert). */
+/** Crea una notificación para otro usuario. */
 export async function createNotification(
   userId: string,
   tipo: string,

@@ -62,8 +62,12 @@ export default function Rutinas() {
   );
 
   const loadAll = async () => {
+    const isUser = primaryRole === "usuario";
     const [r, d, e, re, ra] = await Promise.all([
-      supabase.from("routines").select("*").order("created_at", { ascending: false }),
+      // Si es usuario, no cargamos el catálogo global de rutinas
+      isUser
+        ? Promise.resolve({ data: [] } as any)
+        : supabase.from("routines").select("*").order("created_at", { ascending: false }),
       supabase.from("routine_days").select("*"),
       supabase.from("exercises").select("*").order("nombre"),
       supabase.from("routine_exercises").select("*").order("orden"),
