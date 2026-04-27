@@ -35,6 +35,7 @@ export default function Perfil() {
         peso: data.peso?.toString() ?? "",
         altura: data.altura?.toString() ?? "",
         avatar_url: (data as any).avatar_url ?? "",
+        acepta_mensajes_usuarios: (data as any).acepta_mensajes_usuarios ?? true,
       });
       setLoading(false);
     });
@@ -52,6 +53,7 @@ export default function Perfil() {
       peso: form.peso ? Number(form.peso) : null,
       altura: form.altura ? Number(form.altura) : null,
       avatar_url: form.avatar_url || null,
+      acepta_mensajes_usuarios: !!form.acepta_mensajes_usuarios,
     } as any).eq("user_id", user.id);
     setSaving(false);
     if (error) toast.error(error.message);
