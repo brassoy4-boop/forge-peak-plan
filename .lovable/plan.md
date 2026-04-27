@@ -1,65 +1,108 @@
+## Resumen de cambios
 
+Voy a abordar 10 mejoras agrupadas en estas áreas: Foro, Notificaciones, Chat, Ajustes de usuario, Roles, Usuarios, Dashboard, Rutinas, Simulacros y reseteo de contraseña.
 
-The user wants to import ~1796 exercises from a MySQL dump, mapping area_id to exercise_categories, and downloading images from a remote server pattern.
+---
 
-Let me check current state and plan the import.
+### 1. Foro: respuestas a mensajes concretos + notificación al autor
 
-Key tasks:
-1. Parse `areas.sql` → upsert into `exercise_categories` (preserving area_id mapping)
-2. Parse `exercises.sql` → for each exercise:
-   - Map `area_id` → `category_id`
-   - Build image URL from `image` field: `exercises\\February2023\\256.jpg` → `https://app.corpore10trainer.com/storage/app/public/exercises/February2023/256.jpg`
-   - Download image, upload to `attachments` bucket under `exercises/`
-   - Insert exercise with `nombre`, `category_id`, `imagen_url`
-3. The current `exercise_categories` table has only `nombre`, `orden`, `status` — no slot for legacy area_id. I'll use a temp map (area_id → new uuid) built in the script during the same run.
+- Añadir columna `parent_id` (uuid, nullable, FK lógica a `forum_messages.id`) en `forum_messages` mediante migración.
+- En `Foro.tsx`: 
+  - Botón "Responder" en cada mensaje que fija el `parent_id` y muestra una cita previa al editor.
+  - Renderizar mensajes con un nivel de indentación cuando tienen `parent_id`, mostrando "En respuesta a {autor}: ...preview".
+  - Al enviar la respuesta, crear notificación tipo `foro` para el autor del mensaje padre (si no es uno mismo) con link `/app/foro`.
+  - También notificar al autor del hilo cuando alguien responde al hilo principal.
 
-Considerations:
-- 1796 exercises × image download = heavy. Run as a one-off Node script in /tmp using exec, in batches with concurrency limit (e.g., 8 parallel).
-- Some images may 404 → skip image, still create exercise.
-- Avoid duplicates: check existing exercise by `nombre` first (or wipe relevant ones — better to skip dupes).
-- Use SUPABASE_SERVICE_ROLE_KEY for direct insertion + storage upload from script (already available as secret in sandbox env).
-- Categories: areas.sql has 20 areas. Insert all with the legacy area_id in a local map. We won't store area_id in DB — just need the runtime mapping. Set `orden = area_id` to keep order.
-- Image storage path: `exercises/<filename>` in `attachments` bucket, public URL stored in `imagen_url`.
+### 2. Notificaciones: arreglar "Marcar todas como leídas"
 
-Plan presentation:
+- En `useNotifications.ts`, `markAllRead` y `markRead` actualmente actualizan la BD pero **no recargan ni mutan el estado local** hasta que llega el evento realtime. El bug se debe a que el filtro realtime en `notifications` puede no estar capturando UPDATEs (la tabla puede no estar en `supabase_realtime`).
+- Solución: tras el `update`, refrescar localmente el estado (`setItems`) sin depender de realtime, y además incluir `notifications` en la publicación realtime mediante migración (`ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` con `ALTER TABLE ... REPLICA IDENTITY FULL`).
 
-# Plan: importar ~1.796 ejercicios desde el SQL legado
+### 3. Chat: seleccionar cualquier usuario destinatario
 
-## Qué voy a hacer
+- En `Chat.tsx`, actualmente `loadContacts` solo carga personas con `coach_assignment`. Cambiar para que:
+  - **Superadmin**: vea todos los perfiles.
+  - **Entrenador**: vea sus deportistas asignados + otros entrenadores + superadmin.
+  - **Usuario**: vea sus entrenadores asignados + superadmin + cualquier otro usuario que tenga "recibir mensajes" activado (ver punto 4).
+- El selector "Nuevo..." se sustituye por un combobox con búsqueda por nombre.
 
-1. **Categorías (`areas.sql` → `exercise_categories`)**
-   - Parsear las 20 áreas del fichero.
-   - Insertarlas en `exercise_categories` (si ya existen por nombre, reutilizarlas).
-   - Construir en memoria un mapa `legacy_area_id → category_uuid` para usarlo después.
+### 4. Ajustes: opción de recibir mensajes de otros usuarios
 
-2. **Ejercicios (`exercises.sql` → `exercises` + bucket `attachments`)**
-   Script Node ejecutado en sandbox con `SUPABASE_SERVICE_ROLE_KEY`:
-   - Parsear las 1.796 filas (nombre, area_id, image).
-   - Para cada una:
-     1. Si la `image` es del tipo `exercises\\February2023\\256.jpg` → construir URL pública: `https://app.corpore10trainer.com/storage/app/public/exercises/February2023/256.jpg`.
-     2. Descargar la imagen.
-     3. Subirla a `attachments/exercises/<nombre-fichero>` (bucket público).
-     4. Obtener la `public URL`.
-     5. Insertar en `exercises` con `nombre`, `category_id` (mapeado), `imagen_url`.
-   - Si una imagen no existe (404) → se crea el ejercicio sin imagen y se loguea.
-   - Si el ejercicio ya existe (mismo nombre exacto) → se omite, no se duplica.
-   - Concurrencia: 8 descargas/uploads en paralelo para ir rápido sin saturar.
+- Añadir columna `acepta_mensajes_usuarios` (boolean, default true) en `profiles` vía migración.
+- En `Perfil.tsx`, añadir un toggle "Recibir mensajes privados de otros usuarios" (no aplica a entrenadores/superadmin, que siempre podrán escribir).
+- En `Chat.tsx` al iniciar conversación, validar:
+  - Si el remitente es usuario y el destinatario es usuario con `acepta_mensajes_usuarios = false`, bloquear con toast.
+  - Filtrar la lista de contactos disponibles aplicando esta regla.
 
-3. **Reporte final**
-   - Total importados, omitidos por duplicado, fallos de imagen, fallos críticos.
-   - Lo dejaré por consola para que lo veas tras la ejecución.
+### 5. Un usuario solo puede tener un rol (Configuración)
 
-## Lo que NO hago
+- En `Admin.tsx`, sustituir la UI de "añadir rol" + badges múltiples por un único selector de rol (igual al de `Usuarios.tsx`):
+  - `Select` con valores `usuario | entrenador | superadmin`.
+  - Al cambiar: borrar todos los roles previos del usuario e insertar el nuevo (misma lógica que `setRole` en Usuarios).
+- Eliminar la posibilidad de añadir múltiples roles.
 
-- No toco esquema de base de datos (no añado columna `legacy_id` — el mapeo solo vive durante la ejecución del script). Si en el futuro necesitas reimportar y reconciliar, lo reconsideramos.
-- No borro ejercicios existentes. Solo añado y omito duplicados por nombre.
-- No importo los campos `dificulty`, `machine_id`, `video_url`, `video_file`, `original_url` (quedan fuera del modelo actual). Si los quieres, dímelo y los añadimos al esquema.
+### 6. Eliminar acción "Asignar como entrenador" en /app/usuarios
 
-## Archivos que tocaré
+- Quitar los botones `UserCheck` / `UserMinus` y la columna "Asignación" de la tabla en `Usuarios.tsx`.
+- Eliminar las funciones `assignToCoach`, `unassign`, `isMine` y los tooltips asociados.
+- (La asignación de deportistas a entrenadores se gestiona desde otra parte; si es necesario, se puede añadir más adelante).
 
-- Script temporal en `/tmp/import-exercises.mjs` (no se queda en el repo).
-- Sin cambios en código de la app.
-- Sin migraciones.
+### 7. "Mi panel" del rol usuario diferenciado
 
-¿Apruebas y lanzo la importación?
+Rediseñar el Dashboard para `primaryRole === "usuario"` con datos relevantes:
 
+- **Tarjetas de KPIs personales**: Sesiones de diario en los últimos 30 días, Simulacros realizados, Mejor marca reciente, Rutinas activas.
+- **Gráfica 1 (línea)**: Evolución de RPE / sueño / estrés del diario en últimas 4 semanas (usar `MetricsChart` ya existente).
+- **Gráfica 2 (línea)**: Progresión de la marca clave seleccionable (combo con sus marcas registradas).
+- **Lista**: Próximos simulacros / última entrada de diario / rutina activa actual (ya existente, mejorarla).
+- Mantener panel actual para entrenador/superadmin.
+
+### 8. Rutinas: usuario solo ve sus rutinas asignadas
+
+- Ya existe la lógica `visibleRoutines` que filtra por `assignmentsForUser` para usuarios. Verificar y reforzar:
+  - Al pulsar en una rutina como usuario, abrir vista de solo lectura `viewing` (ya existe).
+  - Confirmar que `loadAll` no expone otras rutinas en la UI cuando `primaryRole === "usuario"`.
+  - Ajustar `loadAll` para no cargar `routines` global cuando el rol es usuario (solo a través de `assignmentsForUser`), reduciendo fugas.
+
+### 9. Superadmin puede eliminar histórico de simulacros (con confirmación)
+
+- En `Simulacros.tsx`, en la lista de ejecuciones (`executions`), añadir botón papelera visible solo si `isSuperadmin` (o el propio usuario).
+- Wrap en `AlertDialog` con confirmación.
+- Al confirmar: borrar `simulacro_results` con `execution_id` y luego `simulacro_executions`.
+- Añadir además botón "Eliminar todo el histórico" (solo superadmin) con doble confirmación, opcionalmente filtrado por usuario.
+
+### 10. Superadmin puede asignar nueva contraseña en "Editar perfil"
+
+- En `Usuarios.tsx`, dentro del diálogo de edición de perfil, añadir sección "Resetear contraseña" (solo visible si `isSuper`):
+  - Input nueva contraseña + botón "Actualizar contraseña".
+  - Llamar a una nueva edge function `admin-reset-password` que use `service_role` y `admin.updateUserById(target_user_id, { password })`.
+  - La edge function valida que el caller es superadmin antes de ejecutar.
+
+---
+
+## Cambios técnicos
+
+**Migraciones SQL:**
+1. `ALTER TABLE forum_messages ADD COLUMN parent_id uuid;`
+2. `ALTER TABLE profiles ADD COLUMN acepta_mensajes_usuarios boolean NOT NULL DEFAULT true;`
+3. `ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` + `ALTER TABLE notifications REPLICA IDENTITY FULL;`
+
+**Nueva edge function:** `supabase/functions/admin-reset-password/index.ts` (verifica superadmin, recibe `user_id` + `password`).
+
+**Archivos a editar:**
+- `src/pages/Foro.tsx` (respuestas anidadas + notificaciones)
+- `src/hooks/useNotifications.ts` (refresh local en mark read)
+- `src/pages/Chat.tsx` (selector amplio + validación)
+- `src/pages/Perfil.tsx` (toggle recibir mensajes)
+- `src/pages/Admin.tsx` (rol único)
+- `src/pages/Usuarios.tsx` (eliminar asignación coach + reset password)
+- `src/pages/Dashboard.tsx` (panel usuario rediseñado)
+- `src/pages/Rutinas.tsx` (verificar filtro)
+- `src/pages/Simulacros.tsx` (eliminar ejecuciones)
+
+---
+
+## Preguntas (no bloqueantes)
+
+- Para "eliminar histórico de simulacros": ¿quieres botón individual por ejecución, o un botón global "Limpiar histórico de un deportista"? Por defecto haré ambos.
+- Para el panel de usuario: ¿quieres una marca destacada concreta o que el usuario elija qué métrica ver? Por defecto haré un selector.
