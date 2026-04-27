@@ -126,20 +126,6 @@ export default function Usuarios() {
     load();
   };
 
-  const assignToCoach = async (userId: string) => {
-    if (!user) return;
-    const { error } = await supabase.from("coach_assignments").insert({ coach_id: user.id, user_id: userId });
-    if (error) return toast.error(error.message);
-    toast.success("Asignado a ti"); load();
-  };
-
-  const unassign = async (userId: string) => {
-    if (!user) return;
-    const { error } = await supabase.from("coach_assignments").delete().eq("coach_id", user.id).eq("user_id", userId);
-    if (error) return toast.error(error.message);
-    toast.success("Desasignado"); load();
-  };
-
   const linkOpo = async (userId: string, opoId: string) => {
     const { error } = await supabase.from("user_oposiciones").insert({ user_id: userId, oposicion_id: opoId });
     if (error) return toast.error(error.message);
@@ -177,7 +163,6 @@ export default function Usuarios() {
     load();
   };
 
-  const isMine = (userId: string) => assignments.some(a => a.user_id === userId && a.coach_id === user?.id);
   const rolesOf = (userId: string) => userRoles.filter(r => r.user_id === userId).map(r => r.role);
 
   const filtered = profiles.filter((p) => {
