@@ -347,6 +347,20 @@ export default function Usuarios() {
                 <div className="space-y-2"><Label>Altura (cm)</Label><Input type="number" step="0.1" value={editForm.altura} onChange={(e) => setEditForm({ ...editForm, altura: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Nacimiento</Label><Input type="date" value={editForm.fecha_nacimiento} onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })} /></div>
               </div>
+
+              {isSuper && (
+                <div className="border-t pt-3 space-y-2">
+                  <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> Resetear contraseña</Label>
+                  <div className="flex gap-2">
+                    <Input type="password" placeholder="Nueva contraseña (mín. 6)" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                    <Button variant="outline" onClick={resetPassword} disabled={resettingPwd || !newPassword}>
+                      {resettingPwd && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Asignar
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">El usuario podrá iniciar sesión con esta nueva contraseña.</p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button>
