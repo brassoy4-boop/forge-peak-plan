@@ -27,6 +27,7 @@ export default function Chat() {
   const [contacts, setContacts] = useState<ProfileLite[]>([]);
   const [contactSearch, setContactSearch] = useState("");
   const [rolesByUser, setRolesByUser] = useState<Record<string, string[]>>({});
+  const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadConvs = async () => {
