@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Save, ShieldAlert, Plus, Loader2 } from "lucide-react";
+import { Save, ShieldAlert, Plus, Loader2, ToggleRight } from "lucide-react";
+import { useFeatureFlags } from "@/lib/featureFlags";
 
 export default function Admin() {
+  const { flags, refresh: refreshFlags } = useFeatureFlags();
   const [pin, setPin] = useState("");
   const [profiles, setProfiles] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
