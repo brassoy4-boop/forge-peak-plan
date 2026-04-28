@@ -198,6 +198,11 @@ export default function Usuarios() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="space-y-2"><Label>Fecha de nacimiento</Label><Input type="date" value={form.fecha_nacimiento} onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })} /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2"><Label>Peso (kg)</Label><Input type="number" step="0.1" value={form.peso} onChange={(e) => setForm({ ...form, peso: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>Altura (cm)</Label><Input type="number" step="0.1" value={form.altura} onChange={(e) => setForm({ ...form, altura: e.target.value })} /></div>
+                  </div>
                   <p className="text-xs text-muted-foreground">El usuario podrá iniciar sesión con email + contraseña + PIN del centro.</p>
                 </div>
                 <DialogFooter>
