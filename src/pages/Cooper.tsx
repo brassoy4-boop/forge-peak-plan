@@ -7,20 +7,35 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Timer, Users } from "lucide-react";
+import {
+  Plus, Pencil, Trash2, Users, ChevronDown, ChevronRight, ArrowUp, ArrowDown,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { calcularDerivados, nivelColor, type Sexo } from "@/lib/cooper";
+import {
+  calcularDerivados, nivelColor, recuperacionLabel,
+  FASES, type CooperFase, type Sexo,
+} from "@/lib/cooper";
 import { MetricsChart } from "@/components/MetricsChart";
 
 interface CooperTest {
   id: string; nombre: string; fecha: string; temperatura: number | null;
   condiciones: string | null; notas: string | null; created_by: string;
+  fase: CooperFase;
 }
 interface CooperResult {
   id: string; test_id: string; user_id: string; sexo: Sexo;
@@ -28,18 +43,20 @@ interface CooperResult {
   distancia_m: number; fc_final: number | null; fc_60s: number | null;
   tiempo_bajo_100_seg: number | null; observaciones: string | null;
 }
-interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
+interface ProfileLite {
+  user_id: string; nombre: string; apellidos: string;
+  sexo: Sexo | null; fecha_nacimiento: string | null; peso: number | null;
+  oposicion: string | null;
+}
 
-const emptyTest = { nombre: "", fecha: new Date().toISOString().slice(0, 10), temperatura: "", condiciones: "", notas: "" };
-const emptyResult = {
-  user_id: "", sexo: "masculino" as Sexo, fecha_nacimiento: "", cuerpo: "", peso: "",
-  distancia_m: "", fc_final: "", fc_60s: "", tiempo_bajo_100_seg: "", observaciones: "",
+const emptyTest = {
+  nombre: "", fecha: new Date().toISOString().slice(0, 10),
+  temperatura: "", condiciones: "", notas: "", fase: "inicial" as CooperFase,
 };
 
 export default function Cooper() {
   const { user, primaryRole } = useAuth();
   const isCoach = primaryRole === "entrenador" || primaryRole === "superadmin";
-
   if (isCoach) return <CooperAdmin />;
   return <CooperUser userId={user?.id ?? ""} />;
 }
@@ -52,38 +69,51 @@ function CooperAdmin() {
   const [openTest, setOpenTest] = useState(false);
   const [editingTest, setEditingTest] = useState<CooperTest | null>(null);
   const [testForm, setTestForm] = useState(emptyTest);
-  const [activeTest, setActiveTest] = useState<CooperTest | null>(null);
-  const [openResult, setOpenResult] = useState(false);
-  const [editingResult, setEditingResult] = useState<CooperResult | null>(null);
-  const [resultForm, setResultForm] = useState(emptyResult);
+  const [activeTab, setActiveTab] = useState<string>("inicial");
   const { user } = useAuth();
 
   const load = async () => {
-    const [t, u] = await Promise.all([
+    const [t, p, uo] = await Promise.all([
       supabase.from("cooper_tests").select("*").order("fecha", { ascending: false }),
-      supabase.from("profiles").select("user_id, nombre, apellidos").order("nombre"),
+      supabase.from("profiles").select("user_id, nombre, apellidos, sexo, fecha_nacimiento, peso").order("nombre"),
+      supabase.from("user_oposiciones").select("user_id, oposiciones(nombre)"),
     ]);
+    const oposByUser: Record<string, string> = {};
+    (uo.data ?? []).forEach((r: any) => {
+      if (!oposByUser[r.user_id] && r.oposiciones?.nombre) oposByUser[r.user_id] = r.oposiciones.nombre;
+    });
+    setUsers((p.data ?? []).map((u: any) => ({
+      user_id: u.user_id, nombre: u.nombre, apellidos: u.apellidos,
+      sexo: u.sexo, fecha_nacimiento: u.fecha_nacimiento, peso: u.peso,
+      oposicion: oposByUser[u.user_id] ?? null,
+    })));
     setTests((t.data ?? []) as CooperTest[]);
-    setUsers((u.data ?? []) as ProfileLite[]);
     if (t.data && t.data.length) {
       const ids = t.data.map((x: any) => x.id);
       const { data: r } = await supabase.from("cooper_results").select("*").in("test_id", ids);
       const grouped: Record<string, CooperResult[]> = {};
       (r ?? []).forEach((x: any) => { (grouped[x.test_id] ||= []).push(x as CooperResult); });
       setResults(grouped);
+    } else {
+      setResults({});
     }
   };
   useEffect(() => { load(); }, []);
 
   const profileOf = (id: string) => users.find((p) => p.user_id === id);
 
-  const openNewTest = () => { setEditingTest(null); setTestForm(emptyTest); setOpenTest(true); };
+  const openNewTest = (fase: CooperFase) => {
+    setEditingTest(null);
+    setTestForm({ ...emptyTest, fase });
+    setOpenTest(true);
+  };
   const openEditTest = (t: CooperTest) => {
     setEditingTest(t);
     setTestForm({
       nombre: t.nombre, fecha: t.fecha,
       temperatura: t.temperatura?.toString() ?? "",
       condiciones: t.condiciones ?? "", notas: t.notas ?? "",
+      fase: t.fase ?? "inicial",
     });
     setOpenTest(true);
   };
@@ -95,6 +125,7 @@ function CooperAdmin() {
       temperatura: testForm.temperatura ? Number(testForm.temperatura) : null,
       condiciones: testForm.condiciones.trim() || null,
       notas: testForm.notas.trim() || null,
+      fase: testForm.fase,
       created_by: user!.id,
     };
     const { error } = editingTest
@@ -110,46 +141,36 @@ function CooperAdmin() {
     toast.success("Test eliminado"); load();
   };
 
-  const openNewResult = (t: CooperTest) => {
-    setActiveTest(t); setEditingResult(null); setResultForm(emptyResult); setOpenResult(true);
-  };
-  const openEditResult = (t: CooperTest, r: CooperResult) => {
-    setActiveTest(t); setEditingResult(r);
-    setResultForm({
-      user_id: r.user_id, sexo: r.sexo,
-      fecha_nacimiento: r.fecha_nacimiento ?? "",
-      cuerpo: r.cuerpo ?? "", peso: r.peso?.toString() ?? "",
-      distancia_m: r.distancia_m.toString(),
-      fc_final: r.fc_final?.toString() ?? "",
-      fc_60s: r.fc_60s?.toString() ?? "",
-      tiempo_bajo_100_seg: r.tiempo_bajo_100_seg?.toString() ?? "",
-      observaciones: r.observaciones ?? "",
-    });
-    setOpenResult(true);
-  };
-  const saveResult = async () => {
-    if (!activeTest) return;
-    if (!resultForm.user_id) return toast.error("Selecciona un usuario");
-    if (!resultForm.distancia_m || Number(resultForm.distancia_m) <= 0) return toast.error("Distancia obligatoria");
+  // Crea una fila vacía para un usuario en un test (selector inline)
+  const addParticipant = async (test: CooperTest, userId: string) => {
+    const prof = profileOf(userId);
+    if (!prof) return;
+    const exists = (results[test.id] ?? []).some((r) => r.user_id === userId);
+    if (exists) return toast.error("Ese usuario ya está en el test");
     const payload = {
-      test_id: activeTest.id,
-      user_id: resultForm.user_id,
-      sexo: resultForm.sexo,
-      fecha_nacimiento: resultForm.fecha_nacimiento || null,
-      cuerpo: resultForm.cuerpo.trim() || null,
-      peso: resultForm.peso ? Number(resultForm.peso) : null,
-      distancia_m: Number(resultForm.distancia_m),
-      fc_final: resultForm.fc_final ? Number(resultForm.fc_final) : null,
-      fc_60s: resultForm.fc_60s ? Number(resultForm.fc_60s) : null,
-      tiempo_bajo_100_seg: resultForm.tiempo_bajo_100_seg ? Number(resultForm.tiempo_bajo_100_seg) : null,
-      observaciones: resultForm.observaciones.trim() || null,
+      test_id: test.id, user_id: userId,
+      sexo: (prof.sexo ?? "masculino") as Sexo,
+      fecha_nacimiento: prof.fecha_nacimiento,
+      cuerpo: prof.oposicion,
+      peso: prof.peso,
+      distancia_m: 0,
     };
-    const { error } = editingResult
-      ? await supabase.from("cooper_results").update(payload).eq("id", editingResult.id)
-      : await supabase.from("cooper_results").insert(payload);
+    const { error } = await supabase.from("cooper_results").insert(payload);
     if (error) return toast.error(error.message);
-    toast.success("Resultado guardado");
-    setOpenResult(false); load();
+    load();
+  };
+
+  const updateResult = async (id: string, patch: Partial<CooperResult>) => {
+    const { error } = await supabase.from("cooper_results").update(patch).eq("id", id);
+    if (error) return toast.error(error.message);
+    // optimista
+    setResults((prev) => {
+      const out: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) {
+        out[k] = v.map((r) => (r.id === id ? { ...r, ...patch } as CooperResult : r));
+      }
+      return out;
+    });
   };
   const deleteResult = async (id: string) => {
     const { error } = await supabase.from("cooper_results").delete().eq("id", id);
@@ -157,174 +178,551 @@ function CooperAdmin() {
     toast.success("Resultado eliminado"); load();
   };
 
-  // Live preview de derivados en el formulario
-  const previewDerivados = useMemo(() => {
-    if (!activeTest || !resultForm.distancia_m) return null;
-    return calcularDerivados({
-      fechaNacimiento: resultForm.fecha_nacimiento || null,
-      fechaTest: activeTest.fecha,
-      sexo: resultForm.sexo,
-      distanciaM: Number(resultForm.distancia_m),
-      tiempoBajo100: resultForm.tiempo_bajo_100_seg ? Number(resultForm.tiempo_bajo_100_seg) : null,
-    });
-  }, [activeTest, resultForm]);
+  const testsByFase = useMemo(() => {
+    const m: Record<CooperFase, CooperTest[]> = { inicial: [], mesociclo_1: [], mesociclo_2: [], pre_examen: [] };
+    tests.forEach((t) => { m[t.fase ?? "inicial"].push(t); });
+    return m;
+  }, [tests]);
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Test de Cooper"
-        description="Gestión de jornadas, registro de marcas y cálculo automático de indicadores."
-        actions={<Button onClick={openNewTest}><Plus className="h-4 w-4 mr-1" />Nuevo test</Button>}
+        description="Réplica del Excel: 4 fases, registro multiusuario y cálculo automático de VAM, VO2max, ritmos y recuperación."
       />
 
-      <div className="grid gap-4">
-        {tests.length === 0 && (
-          <Card><CardContent className="py-8 text-center text-muted-foreground">No hay tests aún. Crea el primero.</CardContent></Card>
-        )}
-        {tests.map((t) => {
-          const rs = results[t.id] ?? [];
-          const stats = computeStats(rs);
-          return (
-            <Card key={t.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {t.nombre}
-                      <Badge variant="outline">{new Date(t.fecha).toLocaleDateString("es-ES")}</Badge>
-                      {t.temperatura != null && <Badge variant="outline">{t.temperatura}°C</Badge>}
-                      <Badge variant="secondary"><Users className="h-3 w-3 mr-1" />{rs.length}</Badge>
-                    </CardTitle>
-                    {(t.condiciones || t.notas) && (
-                      <p className="text-sm text-muted-foreground mt-1">{t.condiciones}{t.condiciones && t.notas ? " · " : ""}{t.notas}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => openNewResult(t)}><Plus className="h-4 w-4 mr-1" />Añadir resultado</Button>
-                    <Button size="sm" variant="ghost" onClick={() => openEditTest(t)}><Pencil className="h-4 w-4" /></Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button size="sm" variant="ghost"><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>¿Eliminar este test?</AlertDialogTitle>
-                          <AlertDialogDescription>Se eliminarán todos los resultados asociados. Esta acción no se puede deshacer.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => deleteTest(t.id)}>Eliminar</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {rs.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
-                    <StatCard label="Media distancia" value={`${stats.avgDist} m`} />
-                    <StatCard label="Media VAM" value={`${stats.avgVam} km/h`} />
-                    <StatCard label="Media VO2max" value={`${stats.avgVo2}`} />
-                    <StatCard label="Máx distancia" value={`${stats.maxDist} m`} />
-                    <StatCard label="Mín distancia" value={`${stats.minDist} m`} />
-                  </div>
-                )}
-                <ResultsTable
-                  testFecha={t.fecha}
-                  results={rs}
-                  profileOf={profileOf}
-                  onEdit={(r) => openEditResult(t, r)}
-                  onDelete={deleteResult}
-                />
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="flex flex-wrap h-auto">
+          {FASES.map((f) => (
+            <TabsTrigger key={f.id} value={f.id}>{f.label}</TabsTrigger>
+          ))}
+          <TabsTrigger value="comparativa">Comparativa</TabsTrigger>
+          <TabsTrigger value="referencia">Referencia</TabsTrigger>
+        </TabsList>
+
+        {FASES.map((f) => (
+          <TabsContent key={f.id} value={f.id} className="space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={() => openNewTest(f.id)}>
+                <Plus className="h-4 w-4 mr-1" />Nuevo test ({f.short})
+              </Button>
+            </div>
+            {testsByFase[f.id].length === 0 && (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">
+                No hay tests en esta fase. Crea el primero.
+              </CardContent></Card>
+            )}
+            {testsByFase[f.id].map((t) => (
+              <TestCard
+                key={t.id}
+                test={t}
+                results={results[t.id] ?? []}
+                users={users}
+                onEditTest={() => openEditTest(t)}
+                onDeleteTest={() => deleteTest(t.id)}
+                onAddParticipant={(uid) => addParticipant(t, uid)}
+                onUpdateResult={updateResult}
+                onDeleteResult={deleteResult}
+              />
+            ))}
+          </TabsContent>
+        ))}
+
+        <TabsContent value="comparativa">
+          <Comparativa tests={tests} results={results} users={users} />
+        </TabsContent>
+
+        <TabsContent value="referencia">
+          <Referencia />
+        </TabsContent>
+      </Tabs>
 
       {/* Test dialog */}
       <Dialog open={openTest} onOpenChange={setOpenTest}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingTest ? "Editar test" : "Nuevo test"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div><Label>Nombre</Label><Input value={testForm.nombre} onChange={(e) => setTestForm({ ...testForm, nombre: e.target.value })} /></div>
+            <div>
+              <Label>Fase</Label>
+              <Select value={testForm.fase} onValueChange={(v) => setTestForm({ ...testForm, fase: v as CooperFase })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {FASES.map((f) => <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Nombre</Label>
+              <Input value={testForm.nombre} onChange={(e) => setTestForm({ ...testForm, nombre: e.target.value })} placeholder="Ej. Promoción 2026 — Inicial" />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Fecha</Label><Input type="date" value={testForm.fecha} onChange={(e) => setTestForm({ ...testForm, fecha: e.target.value })} /></div>
               <div><Label>Temperatura (°C)</Label><Input type="number" step="0.1" value={testForm.temperatura} onChange={(e) => setTestForm({ ...testForm, temperatura: e.target.value })} /></div>
             </div>
-            <div><Label>Condiciones</Label><Input value={testForm.condiciones} onChange={(e) => setTestForm({ ...testForm, condiciones: e.target.value })} /></div>
+            <div><Label>Condiciones</Label><Input value={testForm.condiciones} onChange={(e) => setTestForm({ ...testForm, condiciones: e.target.value })} placeholder="Pista, viento, etc." /></div>
             <div><Label>Notas</Label><Textarea value={testForm.notas} onChange={(e) => setTestForm({ ...testForm, notas: e.target.value })} /></div>
           </div>
           <DialogFooter><Button onClick={saveTest}>Guardar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
 
-      {/* Result dialog */}
-      <Dialog open={openResult} onOpenChange={setOpenResult}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingResult ? "Editar resultado" : "Añadir resultado"} — {activeTest?.nombre}</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+/* ============== TEST CARD (tabla editable inline tipo Excel) ============== */
+function TestCard({
+  test, results, users, onEditTest, onDeleteTest, onAddParticipant, onUpdateResult, onDeleteResult,
+}: {
+  test: CooperTest;
+  results: CooperResult[];
+  users: ProfileLite[];
+  onEditTest: () => void;
+  onDeleteTest: () => void;
+  onAddParticipant: (userId: string) => void;
+  onUpdateResult: (id: string, patch: Partial<CooperResult>) => void;
+  onDeleteResult: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const [newUserId, setNewUserId] = useState("");
+  const userMap = useMemo(() => Object.fromEntries(users.map((u) => [u.user_id, u])), [users]);
+  const availableUsers = users.filter((u) => !results.some((r) => r.user_id === u.user_id));
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <button onClick={() => setOpen(!open)} className="flex items-start gap-2 text-left">
+            {open ? <ChevronDown className="h-4 w-4 mt-1" /> : <ChevronRight className="h-4 w-4 mt-1" />}
             <div>
-              <Label>Usuario</Label>
-              <Select value={resultForm.user_id} onValueChange={(v) => setResultForm({ ...resultForm, user_id: v })} disabled={!!editingResult}>
-                <SelectTrigger><SelectValue placeholder="Selecciona usuario" /></SelectTrigger>
+              <CardTitle className="flex items-center gap-2 flex-wrap">
+                {test.nombre}
+                <Badge variant="outline">{new Date(test.fecha).toLocaleDateString("es-ES")}</Badge>
+                {test.temperatura != null && <Badge variant="outline">{test.temperatura}°C</Badge>}
+                <Badge variant="secondary"><Users className="h-3 w-3 mr-1" />{results.length}</Badge>
+              </CardTitle>
+              {(test.condiciones || test.notas) && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {test.condiciones}{test.condiciones && test.notas ? " · " : ""}{test.notas}
+                </p>
+              )}
+            </div>
+          </button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={onEditTest}><Pencil className="h-4 w-4" /></Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="ghost"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Eliminar este test?</AlertDialogTitle>
+                  <AlertDialogDescription>Se eliminarán todos los resultados asociados.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={onDeleteTest}>Eliminar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </CardHeader>
+      {open && (
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">Nº</TableHead>
+                  <TableHead className="min-w-[180px]">NOMBRE</TableHead>
+                  <TableHead>SEXO</TableHead>
+                  <TableHead className="min-w-[140px]">F. NAC.</TableHead>
+                  <TableHead>EDAD</TableHead>
+                  <TableHead className="min-w-[120px]">CUERPO</TableHead>
+                  <TableHead>PESO</TableHead>
+                  <TableHead>DIST. (m)</TableHead>
+                  <TableHead>VAM</TableHead>
+                  <TableHead>VO2max</TableHead>
+                  <TableHead>NIVEL</TableHead>
+                  <TableHead>R-Umbral</TableHead>
+                  <TableHead>Billat</TableHead>
+                  <TableHead>Zona 1</TableHead>
+                  <TableHead>FC 60s</TableHead>
+                  <TableHead>t&lt;100</TableHead>
+                  <TableHead>HRR</TableHead>
+                  <TableHead className="min-w-[160px]">OBSERVACIONES</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.map((r, i) => (
+                  <ParticipantRow
+                    key={r.id}
+                    n={i + 1}
+                    test={test}
+                    r={r}
+                    profile={userMap[r.user_id]}
+                    onUpdate={(patch) => onUpdateResult(r.id, patch)}
+                    onDelete={() => onDeleteResult(r.id)}
+                  />
+                ))}
+                {results.length === 0 && (
+                  <TableRow><TableCell colSpan={19} className="text-center text-muted-foreground py-4">
+                    Sin participantes. Añade uno abajo.
+                  </TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="mt-3 flex gap-2 items-end">
+            <div className="flex-1 max-w-sm">
+              <Label className="text-xs">Añadir participante</Label>
+              <Select value={newUserId} onValueChange={setNewUserId}>
+                <SelectTrigger><SelectValue placeholder="Selecciona usuario..." /></SelectTrigger>
                 <SelectContent>
-                  {users.map((u) => <SelectItem key={u.user_id} value={u.user_id}>{u.nombre} {u.apellidos}</SelectItem>)}
+                  {availableUsers.length === 0 && <div className="px-2 py-1 text-sm text-muted-foreground">No hay usuarios disponibles</div>}
+                  {availableUsers.map((u) => (
+                    <SelectItem key={u.user_id} value={u.user_id}>{u.nombre} {u.apellidos}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Sexo</Label>
-                <Select value={resultForm.sexo} onValueChange={(v) => setResultForm({ ...resultForm, sexo: v as Sexo })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="masculino">Hombre</SelectItem>
-                    <SelectItem value="femenino">Mujer</SelectItem>
-                    <SelectItem value="unisex">Unisex</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div><Label>Fecha de nacimiento</Label><Input type="date" value={resultForm.fecha_nacimiento} onChange={(e) => setResultForm({ ...resultForm, fecha_nacimiento: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Cuerpo / perfil</Label><Input value={resultForm.cuerpo} onChange={(e) => setResultForm({ ...resultForm, cuerpo: e.target.value })} /></div>
-              <div><Label>Peso (kg)</Label><Input type="number" step="0.1" value={resultForm.peso} onChange={(e) => setResultForm({ ...resultForm, peso: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Distancia (m) *</Label><Input type="number" value={resultForm.distancia_m} onChange={(e) => setResultForm({ ...resultForm, distancia_m: e.target.value })} /></div>
-              <div><Label>FC final (ppm)</Label><Input type="number" value={resultForm.fc_final} onChange={(e) => setResultForm({ ...resultForm, fc_final: e.target.value })} /></div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>FC a los 60s</Label><Input type="number" value={resultForm.fc_60s} onChange={(e) => setResultForm({ ...resultForm, fc_60s: e.target.value })} /></div>
-              <div><Label>Tiempo en bajar de 100 ppm (s)</Label><Input type="number" value={resultForm.tiempo_bajo_100_seg} onChange={(e) => setResultForm({ ...resultForm, tiempo_bajo_100_seg: e.target.value })} /></div>
-            </div>
-            <div><Label>Observaciones</Label><Textarea value={resultForm.observaciones} onChange={(e) => setResultForm({ ...resultForm, observaciones: e.target.value })} /></div>
-
-            {previewDerivados && (
-              <Card className="bg-muted/30">
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Vista previa de cálculos</CardTitle></CardHeader>
-                <CardContent className="text-sm grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <div><span className="text-muted-foreground">Edad:</span> {previewDerivados.edad ?? "—"}</div>
-                  <div><span className="text-muted-foreground">VAM:</span> {previewDerivados.vam ?? "—"} km/h</div>
-                  <div><span className="text-muted-foreground">VO2max:</span> {previewDerivados.vo2max ?? "—"}</div>
-                  <div><span className="text-muted-foreground">Nivel:</span> {previewDerivados.nivel ?? "—"}</div>
-                  <div><span className="text-muted-foreground">Recuperación:</span> {previewDerivados.recuperacion ?? "—"}</div>
-                  {previewDerivados.ritmos && (
-                    <>
-                      <div><span className="text-muted-foreground">R-Umbral:</span> {previewDerivados.ritmos.rUmbral.minPorKm}/km</div>
-                      <div><span className="text-muted-foreground">Billat:</span> {previewDerivados.ritmos.billat.minPorKm}/km</div>
-                      <div><span className="text-muted-foreground">Zona 1:</span> {previewDerivados.ritmos.zona1.minPorKm}/km</div>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            <Button
+              disabled={!newUserId}
+              onClick={() => { onAddParticipant(newUserId); setNewUserId(""); }}
+            >
+              <Plus className="h-4 w-4 mr-1" />Añadir
+            </Button>
           </div>
-          <DialogFooter><Button onClick={saveResult}>Guardar</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+/* ============== Fila editable ============== */
+function ParticipantRow({
+  n, test, r, profile, onUpdate, onDelete,
+}: {
+  n: number;
+  test: CooperTest;
+  r: CooperResult;
+  profile?: ProfileLite;
+  onUpdate: (patch: Partial<CooperResult>) => void;
+  onDelete: () => void;
+}) {
+  const d = useMemo(() => calcularDerivados({
+    fechaNacimiento: r.fecha_nacimiento,
+    fechaTest: test.fecha,
+    sexo: r.sexo,
+    distanciaM: r.distancia_m,
+    tiempoBajo100: r.tiempo_bajo_100_seg,
+  }), [r, test.fecha]);
+
+  return (
+    <TableRow>
+      <TableCell className="text-xs text-muted-foreground">{n}</TableCell>
+      <TableCell className="text-sm font-medium">
+        {profile ? `${profile.nombre} ${profile.apellidos}` : "—"}
+      </TableCell>
+      <TableCell>
+        <Select value={r.sexo} onValueChange={(v) => onUpdate({ sexo: v as Sexo })}>
+          <SelectTrigger className="h-8 w-20"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="masculino">H</SelectItem>
+            <SelectItem value="femenino">M</SelectItem>
+            <SelectItem value="unisex">—</SelectItem>
+          </SelectContent>
+        </Select>
+      </TableCell>
+      <TableCell>
+        <CellInput type="date" value={r.fecha_nacimiento ?? ""} onCommit={(v) => onUpdate({ fecha_nacimiento: v || null })} className="w-[140px]" />
+      </TableCell>
+      <TableCell className="text-sm">{d.edad ?? "—"}</TableCell>
+      <TableCell>
+        <CellInput value={r.cuerpo ?? ""} onCommit={(v) => onUpdate({ cuerpo: v || null })} className="w-[120px]" />
+      </TableCell>
+      <TableCell>
+        <CellInput type="number" step="0.1" value={r.peso?.toString() ?? ""} onCommit={(v) => onUpdate({ peso: v ? Number(v) : null })} className="w-20" />
+      </TableCell>
+      <TableCell>
+        <CellInput type="number" value={r.distancia_m ? r.distancia_m.toString() : ""} onCommit={(v) => onUpdate({ distancia_m: v ? Number(v) : 0 })} className="w-24" />
+      </TableCell>
+      <TableCell className="text-sm">{d.vam ?? "—"}</TableCell>
+      <TableCell className="text-sm">{d.vo2max ?? "—"}</TableCell>
+      <TableCell>{d.nivel && <Badge variant="outline" className={nivelColor(d.nivel)}>{d.nivel}</Badge>}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{d.ritmos ? `${d.ritmos.rUmbral.minPorKm} · ${d.ritmos.rUmbral.segPor400}` : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{d.ritmos ? `${d.ritmos.billat.minPorKm} · ${d.ritmos.billat.segPor400}` : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{d.ritmos ? `${d.ritmos.zona1.minPorKm} · ${d.ritmos.zona1.segPor400}` : "—"}</TableCell>
+      <TableCell>
+        <CellInput type="number" value={r.fc_60s?.toString() ?? ""} onCommit={(v) => onUpdate({ fc_60s: v ? Number(v) : null })} className="w-16" />
+      </TableCell>
+      <TableCell>
+        <CellInput type="number" value={r.tiempo_bajo_100_seg?.toString() ?? ""} onCommit={(v) => onUpdate({ tiempo_bajo_100_seg: v ? Number(v) : null })} className="w-16" />
+      </TableCell>
+      <TableCell className="text-xs whitespace-nowrap">{recuperacionLabel(d.recuperacion)}</TableCell>
+      <TableCell>
+        <CellInput value={r.observaciones ?? ""} onCommit={(v) => onUpdate({ observaciones: v || null })} className="w-40" />
+      </TableCell>
+      <TableCell>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="sm" variant="ghost"><Trash2 className="h-3 w-3 text-destructive" /></Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar participante?</AlertDialogTitle>
+              <AlertDialogDescription>Se borrará su resultado en este test.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={onDelete}>Eliminar</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/* Input que solo guarda en blur o Enter */
+function CellInput({
+  value, onCommit, type = "text", step, className,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  type?: string;
+  step?: string;
+  className?: string;
+}) {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  return (
+    <Input
+      type={type}
+      step={step}
+      value={v}
+      onChange={(e) => setV(e.target.value)}
+      onBlur={() => { if (v !== value) onCommit(v); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") setV(value);
+      }}
+      className={`h-8 ${className ?? ""}`}
+    />
+  );
+}
+
+/* ============== COMPARATIVA ============== */
+function Comparativa({
+  tests, results, users,
+}: {
+  tests: CooperTest[];
+  results: Record<string, CooperResult[]>;
+  users: ProfileLite[];
+}) {
+  const rows = useMemo(() => {
+    // Index: testId -> test
+    const testById: Record<string, CooperTest> = Object.fromEntries(tests.map((t) => [t.id, t]));
+
+    // Aplanar todos los resultados con su test
+    const all: { r: CooperResult; t: CooperTest }[] = [];
+    Object.values(results).forEach((arr) => arr.forEach((r) => {
+      const t = testById[r.test_id];
+      if (t) all.push({ r, t });
+    }));
+
+    // Agrupar por usuario
+    const byUser: Record<string, { r: CooperResult; t: CooperTest }[]> = {};
+    all.forEach((x) => { (byUser[x.r.user_id] ||= []).push(x); });
+
+    return Object.entries(byUser).map(([uid, items]) => {
+      const prof = users.find((u) => u.user_id === uid);
+      const byFase: Record<CooperFase, { r: CooperResult; t: CooperTest } | null> = {
+        inicial: null, mesociclo_1: null, mesociclo_2: null, pre_examen: null,
+      };
+      items.forEach((x) => {
+        const f = x.t.fase ?? "inicial";
+        if (!byFase[f] || byFase[f]!.t.fecha < x.t.fecha) byFase[f] = x;
+      });
+      const vamOf = (x: { r: CooperResult; t: CooperTest } | null) =>
+        x ? calcularDerivados({
+          fechaNacimiento: x.r.fecha_nacimiento, fechaTest: x.t.fecha, sexo: x.r.sexo,
+          distanciaM: x.r.distancia_m, tiempoBajo100: null,
+        }).vam : null;
+      const vams = FASES.map((f) => vamOf(byFase[f.id]));
+      const vamsValid = vams.filter((v): v is number => v != null && v > 0);
+      const mejorVam = vamsValid.length ? Math.max(...vamsValid) : null;
+      const t1Vam = vams[0];
+      const lastVam = [...vams].reverse().find((v) => v != null && v > 0) ?? null;
+      const evol = t1Vam && lastVam ? ((lastVam - t1Vam) / t1Vam) * 100 : null;
+      const edad = calcularDerivados({
+        fechaNacimiento: prof?.fecha_nacimiento ?? null,
+        fechaTest: new Date().toISOString().slice(0, 10),
+        sexo: (prof?.sexo ?? "masculino") as Sexo,
+        distanciaM: 1,
+        tiempoBajo100: null,
+      }).edad;
+      return { uid, prof, byFase, vams, mejorVam, evol, edad };
+    }).sort((a, b) => (a.prof?.nombre ?? "").localeCompare(b.prof?.nombre ?? ""));
+  }, [tests, results, users]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Tabla comparativa de progresión</CardTitle>
+        <p className="text-sm text-muted-foreground">Para cada usuario se muestra el último resultado de cada fase.</p>
+      </CardHeader>
+      <CardContent>
+        {rows.length === 0 ? (
+          <div className="text-center text-muted-foreground py-6">Sin datos. Registra resultados en cualquiera de las fases.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nº</TableHead>
+                  <TableHead>NOMBRE</TableHead>
+                  <TableHead>SEXO</TableHead>
+                  <TableHead>EDAD</TableHead>
+                  <TableHead>CUERPO</TableHead>
+                  {FASES.map((f) => (
+                    <TableHead key={f.id} className="text-center">{f.short} Dist / VAM</TableHead>
+                  ))}
+                  <TableHead>MEJOR VAM</TableHead>
+                  <TableHead>EVOLUCIÓN T1→últ.</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row, i) => (
+                  <TableRow key={row.uid}>
+                    <TableCell className="text-xs text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="font-medium">{row.prof ? `${row.prof.nombre} ${row.prof.apellidos}` : "—"}</TableCell>
+                    <TableCell className="text-xs">{row.prof?.sexo === "femenino" ? "M" : row.prof?.sexo === "masculino" ? "H" : "—"}</TableCell>
+                    <TableCell>{row.edad ?? "—"}</TableCell>
+                    <TableCell className="text-xs">{row.prof?.oposicion ?? "—"}</TableCell>
+                    {FASES.map((f, idx) => {
+                      const x = row.byFase[f.id];
+                      return (
+                        <TableCell key={f.id} className="text-xs text-center">
+                          {x ? `${x.r.distancia_m} m / ${row.vams[idx]?.toFixed(2)}` : "—"}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="font-medium">{row.mejorVam?.toFixed(2) ?? "—"}</TableCell>
+                    <TableCell>
+                      {row.evol == null ? "—" : (
+                        <span className={`flex items-center gap-1 text-sm ${row.evol >= 0 ? "text-emerald-600" : "text-destructive"}`}>
+                          {row.evol >= 0 ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                          {Math.abs(row.evol).toFixed(1)}%
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ============== REFERENCIA (estática, ACSM 2021) ============== */
+function Referencia() {
+  const hombres = [
+    ["EXCELENTE", "> 63", "> 60", "> 57", "> 54", "Top 5% — Élite"],
+    ["MUY BUENO", "55 – 63", "53 – 60", "50 – 57", "47 – 54", "CNP notable / GC holgado"],
+    ["BUENO", "48 – 54", "47 – 52", "43 – 49", "41 – 46", "CNP aprobado / Bombero base"],
+    ["ACEPTABLE", "42 – 47", "40 – 46", "37 – 42", "35 – 40", "Límite CNP — trabajo urgente"],
+    ["REGULAR", "35 – 41", "33 – 39", "31 – 36", "29 – 34", "Por debajo del aprobado"],
+    ["BAJO", "< 35", "< 33", "< 31", "< 29", "Base crítica"],
+  ];
+  const mujeres = [
+    ["EXCELENTE", "> 55", "> 52", "> 49", "> 47", "Top 5% — Élite"],
+    ["MUY BUENO", "48 – 55", "46 – 52", "43 – 49", "41 – 47", "Nivel muy alto"],
+    ["BUENO", "41 – 47", "39 – 45", "36 – 42", "34 – 40", "Nivel bueno"],
+    ["ACEPTABLE", "35 – 40", "33 – 38", "30 – 35", "28 – 33", "Nivel aceptable"],
+    ["REGULAR", "28 – 34", "26 – 32", "24 – 29", "22 – 27", "Por debajo de lo deseable"],
+    ["BAJO", "< 28", "< 26", "< 24", "< 22", "Base crítica"],
+  ];
+  const formulas = [
+    ["VAM (km/h)", "= Distancia (m) ÷ 200", "2.600m ÷ 200 = 13.0 km/h"],
+    ["VO2max (H)", "= Dist × 0.0225 − 11.3", "2.600 × 0.0225 − 11.3 = 47.2"],
+    ["VO2max (M)", "= Dist × 0.0200 − 7.5", "2.400 × 0.0200 − 7.5 = 40.5"],
+    ["Billat 30-30", "= 1440 ÷ VAM → seg/400m", "VAM 13.0 → 111 seg/400m"],
+    ["R-Umbral 85%", "= 1440 ÷ (VAM × 0.85) → s/400m", "VAM 13.0 → 130 seg/400m"],
+    ["Zona 1 67%", "= 1440 ÷ (VAM × 0.67) → s/400m", "VAM 13.0 → 165 seg/400m"],
+  ];
+
+  const renderTabla = (titulo: string, filas: string[][]) => (
+    <Card>
+      <CardHeader><CardTitle className="text-base">{titulo}</CardTitle></CardHeader>
+      <CardContent className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>NIVEL</TableHead>
+              <TableHead>&lt; 25 años</TableHead>
+              <TableHead>25-34 años</TableHead>
+              <TableHead>35-44 años</TableHead>
+              <TableHead>&gt; 45 años</TableHead>
+              <TableHead>Clasificación</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filas.map((f) => (
+              <TableRow key={f[0]}>
+                <TableCell><Badge variant="outline" className={nivelColor(f[0] as any)}>{f[0]}</Badge></TableCell>
+                <TableCell>{f[1]}</TableCell>
+                <TableCell>{f[2]}</TableCell>
+                <TableCell>{f[3]}</TableCell>
+                <TableCell>{f[4]}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{f[5]}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Tabla de referencia VO2max por edad y sexo — ACSM 2021</CardTitle>
+        </CardHeader>
+      </Card>
+      {renderTabla("HOMBRES", hombres)}
+      {renderTabla("MUJERES", mujeres)}
+      <Card>
+        <CardHeader><CardTitle className="text-base">Fórmulas rápidas</CardTitle></CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Indicador</TableHead>
+                <TableHead>Fórmula</TableHead>
+                <TableHead>Ejemplo</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {formulas.map((f) => (
+                <TableRow key={f[0]}>
+                  <TableCell className="font-medium">{f[0]}</TableCell>
+                  <TableCell className="font-mono text-xs">{f[1]}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{f[2]}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <p className="text-xs text-muted-foreground mt-3">
+            Fuente: ACSM Guidelines for Exercise Testing and Prescription (2021) · Hombres: VO2max = Dist × 0.0225 − 11.3 (Cooper 1968) · Mujeres: VO2max = Dist × 0.0200 − 7.5 (Heyward 2002).
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -344,7 +742,6 @@ function CooperUser({ userId }: { userId: string }) {
       const map: Record<string, CooperTest> = {};
       (t ?? []).forEach((x: any) => { map[x.id] = x as CooperTest; });
       setTests(map);
-      rs.sort((a, b) => (tests[a.test_id]?.fecha ?? "").localeCompare(tests[b.test_id]?.fecha ?? ""));
     }
     setResults(rs);
   };
@@ -356,11 +753,8 @@ function CooperUser({ userId }: { userId: string }) {
         const t = tests[r.test_id];
         if (!t) return null;
         const d = calcularDerivados({
-          fechaNacimiento: r.fecha_nacimiento,
-          fechaTest: t.fecha,
-          sexo: r.sexo,
-          distanciaM: r.distancia_m,
-          tiempoBajo100: r.tiempo_bajo_100_seg,
+          fechaNacimiento: r.fecha_nacimiento, fechaTest: t.fecha, sexo: r.sexo,
+          distanciaM: r.distancia_m, tiempoBajo100: r.tiempo_bajo_100_seg,
         });
         return { r, t, d };
       })
@@ -409,17 +803,41 @@ function CooperUser({ userId }: { userId: string }) {
             </TabsList>
             <TabsContent value="historico">
               <Card>
-                <CardContent className="pt-6">
-                  <ResultsTable
-                    testFecha=""
-                    results={enriched.map((e) => e.r)}
-                    testsMap={tests}
-                    profileOf={() => undefined}
-                    showUserCol={false}
-                    showTestCol
-                    onEdit={undefined}
-                    onDelete={undefined}
-                  />
+                <CardContent className="pt-6 overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Test</TableHead>
+                        <TableHead>Fecha</TableHead>
+                        <TableHead>Fase</TableHead>
+                        <TableHead>Dist (m)</TableHead>
+                        <TableHead>VAM</TableHead>
+                        <TableHead>VO2max</TableHead>
+                        <TableHead>Nivel</TableHead>
+                        <TableHead>R-Umbral</TableHead>
+                        <TableHead>Billat</TableHead>
+                        <TableHead>Zona 1</TableHead>
+                        <TableHead>Recup.</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {enriched.map((e) => (
+                        <TableRow key={e.r.id}>
+                          <TableCell>{e.t.nombre}</TableCell>
+                          <TableCell className="text-xs">{new Date(e.t.fecha).toLocaleDateString("es-ES")}</TableCell>
+                          <TableCell className="text-xs">{FASES.find((f) => f.id === e.t.fase)?.short ?? "—"}</TableCell>
+                          <TableCell className="font-medium">{e.r.distancia_m}</TableCell>
+                          <TableCell>{e.d.vam ?? "—"}</TableCell>
+                          <TableCell>{e.d.vo2max ?? "—"}</TableCell>
+                          <TableCell>{e.d.nivel && <Badge variant="outline" className={nivelColor(e.d.nivel)}>{e.d.nivel}</Badge>}</TableCell>
+                          <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.rUmbral.minPorKm} · ${e.d.ritmos.rUmbral.segPor400}` : "—"}</TableCell>
+                          <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.billat.minPorKm} · ${e.d.ritmos.billat.segPor400}` : "—"}</TableCell>
+                          <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.zona1.minPorKm} · ${e.d.ritmos.zona1.segPor400}` : "—"}</TableCell>
+                          <TableCell className="text-xs">{recuperacionLabel(e.d.recuperacion)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -442,7 +860,6 @@ function CooperUser({ userId }: { userId: string }) {
   );
 }
 
-/* ============== Shared subcomponents ============== */
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md border bg-card p-3">
@@ -450,109 +867,4 @@ function StatCard({ label, value }: { label: string; value: string }) {
       <div className="text-lg font-semibold">{value}</div>
     </div>
   );
-}
-
-function ResultsTable({
-  results, profileOf, onEdit, onDelete, testFecha, testsMap, showUserCol = true, showTestCol = false,
-}: {
-  results: CooperResult[];
-  profileOf: (id: string) => ProfileLite | undefined;
-  onEdit?: (r: CooperResult) => void;
-  onDelete?: (id: string) => void;
-  testFecha: string;
-  testsMap?: Record<string, CooperTest>;
-  showUserCol?: boolean;
-  showTestCol?: boolean;
-}) {
-  if (results.length === 0) {
-    return <div className="text-sm text-muted-foreground py-4 text-center">Sin resultados.</div>;
-  }
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {showTestCol && <TableHead>Test</TableHead>}
-            {showUserCol && <TableHead>Usuario</TableHead>}
-            <TableHead>Sexo</TableHead>
-            <TableHead>Edad</TableHead>
-            <TableHead>Dist (m)</TableHead>
-            <TableHead>VAM</TableHead>
-            <TableHead>VO2max</TableHead>
-            <TableHead>Nivel</TableHead>
-            <TableHead>R-Umbral</TableHead>
-            <TableHead>Billat</TableHead>
-            <TableHead>Zona 1</TableHead>
-            <TableHead>Recup.</TableHead>
-            {(onEdit || onDelete) && <TableHead></TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {results.map((r) => {
-            const fechaRef = testsMap?.[r.test_id]?.fecha ?? testFecha;
-            const d = calcularDerivados({
-              fechaNacimiento: r.fecha_nacimiento, fechaTest: fechaRef, sexo: r.sexo,
-              distanciaM: r.distancia_m, tiempoBajo100: r.tiempo_bajo_100_seg,
-            });
-            const prof = profileOf(r.user_id);
-            return (
-              <TableRow key={r.id}>
-                {showTestCol && <TableCell className="text-xs">{testsMap?.[r.test_id]?.nombre} <div className="text-muted-foreground">{fechaRef && new Date(fechaRef).toLocaleDateString("es-ES")}</div></TableCell>}
-                {showUserCol && <TableCell className="text-sm">{prof ? `${prof.nombre} ${prof.apellidos}` : "—"}</TableCell>}
-                <TableCell className="text-xs capitalize">{r.sexo}</TableCell>
-                <TableCell>{d.edad ?? "—"}</TableCell>
-                <TableCell className="font-medium">{r.distancia_m}</TableCell>
-                <TableCell>{d.vam ?? "—"}</TableCell>
-                <TableCell>{d.vo2max ?? "—"}</TableCell>
-                <TableCell>{d.nivel && <Badge variant="outline" className={nivelColor(d.nivel)}>{d.nivel}</Badge>}</TableCell>
-                <TableCell className="text-xs">{d.ritmos ? `${d.ritmos.rUmbral.minPorKm}/km · ${d.ritmos.rUmbral.segPor400}/400` : "—"}</TableCell>
-                <TableCell className="text-xs">{d.ritmos ? `${d.ritmos.billat.minPorKm}/km · ${d.ritmos.billat.segPor400}/400` : "—"}</TableCell>
-                <TableCell className="text-xs">{d.ritmos ? `${d.ritmos.zona1.minPorKm}/km · ${d.ritmos.zona1.segPor400}/400` : "—"}</TableCell>
-                <TableCell className="text-xs">{d.recuperacion ?? "—"}</TableCell>
-                {(onEdit || onDelete) && (
-                  <TableCell>
-                    <div className="flex gap-1">
-                      {onEdit && <Button size="sm" variant="ghost" onClick={() => onEdit(r)}><Pencil className="h-3 w-3" /></Button>}
-                      {onDelete && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="ghost"><Trash2 className="h-3 w-3 text-destructive" /></Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar resultado?</AlertDialogTitle>
-                              <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => onDelete(r.id)}>Eliminar</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </div>
-                  </TableCell>
-                )}
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
-function computeStats(rs: CooperResult[]) {
-  if (rs.length === 0) return { avgDist: 0, avgVam: 0, avgVo2: 0, maxDist: 0, minDist: 0 };
-  const dists = rs.map((r) => r.distancia_m);
-  const vams = rs.map((r) => r.distancia_m / 200);
-  const vo2s = rs.map((r) => r.sexo === "femenino" ? r.distancia_m * 0.020 - 7.5 : r.distancia_m * 0.0225 - 11.3);
-  const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
-  return {
-    avgDist: Math.round(avg(dists)),
-    avgVam: avg(vams).toFixed(2),
-    avgVo2: avg(vo2s).toFixed(1),
-    maxDist: Math.max(...dists),
-    minDist: Math.min(...dists),
-  };
 }

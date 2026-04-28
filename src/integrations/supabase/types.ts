@@ -147,6 +147,7 @@ export type Database = {
           condiciones: string | null
           created_at: string
           created_by: string
+          fase: Database["public"]["Enums"]["cooper_fase"]
           fecha: string
           id: string
           nombre: string
@@ -158,6 +159,7 @@ export type Database = {
           condiciones?: string | null
           created_at?: string
           created_by: string
+          fase?: Database["public"]["Enums"]["cooper_fase"]
           fecha?: string
           id?: string
           nombre: string
@@ -169,6 +171,7 @@ export type Database = {
           condiciones?: string | null
           created_at?: string
           created_by?: string
+          fase?: Database["public"]["Enums"]["cooper_fase"]
           fecha?: string
           id?: string
           nombre?: string
@@ -1301,6 +1304,7 @@ export type Database = {
     }
     Enums: {
       app_role: "usuario" | "entrenador" | "superadmin"
+      cooper_fase: "inicial" | "mesociclo_1" | "mesociclo_2" | "pre_examen"
       entity_status: "activo" | "inactivo" | "archivado" | "borrador"
       mark_record_origin:
         | "simulacro"
@@ -1445,6 +1449,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["usuario", "entrenador", "superadmin"],
+      cooper_fase: ["inicial", "mesociclo_1", "mesociclo_2", "pre_examen"],
       entity_status: ["activo", "inactivo", "archivado", "borrador"],
       mark_record_origin: [
         "simulacro",

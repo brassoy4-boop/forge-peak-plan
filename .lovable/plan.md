@@ -1,103 +1,113 @@
-# Plan: Módulo Test de Cooper
+## Objetivo
 
-## Resumen funcional
+Replicar exactamente el Excel `BASE_PARA_COPIAR_COOPER_CALCULOS.xlsx` dentro del módulo Test de Cooper. Mismas pestañas, mismos campos, mismas fórmulas, pero seleccionando usuarios reales de la plataforma en vez de escribir el nombre.
 
-Un nuevo módulo permite a entrenadores/superadmin crear **sesiones de test de Cooper** (jornadas) y registrar dentro de cada una las marcas de múltiples usuarios. La app calcula automáticamente edad, VAM, VO2max, nivel físico, ritmos derivados y valoración de recuperación cardiaca. Cada usuario solo ve sus propios resultados e histórico; los entrenadores y el superadmin gestionan todo.
+## Estructura visual (pestañas)
 
-## Modelo de datos (migración)
+La página `/app/cooper` para entrenador/superadmin tendrá 6 tabs replicando el Excel:
 
-Dos tablas nuevas en `public`:
+```
+[ Test 1 - Inicial ] [ Test 2 - Meso 1 ] [ Test 3 - Meso 2 ] [ Test 4 - Pre-Examen ] [ Comparativa ] [ Referencia ]
+```
 
-**`cooper_tests`** (la sesión / jornada)
-- `id uuid pk`
-- `nombre text not null`
-- `fecha date not null`
-- `temperatura numeric null`
-- `condiciones text null`
-- `notas text null`
-- `created_by uuid not null`
-- `created_at`, `updated_at`
+Cada una de las 4 tabs de test agrupa **todos los `cooper_tests` cuya fase coincida**, ordenados por fecha. Dentro de cada tab se listan las sesiones de esa fase y, al abrir una, se ve la tabla tipo Excel con todos los participantes.
 
-**`cooper_results`** (resultado de un usuario en una sesión)
-- `id uuid pk`
-- `test_id uuid not null` → `cooper_tests.id` (cascade)
-- `user_id uuid not null` (referencia al usuario existente)
-- Datos manuales: `sexo` (enum sexo_enum), `fecha_nacimiento date`, `cuerpo text`, `peso numeric`, `distancia_m integer not null`, `fc_final integer`, `fc_60s integer`, `tiempo_bajo_100_seg integer`, `observaciones text`
-- `created_at`, `updated_at`
-- Único `(test_id, user_id)` para evitar duplicados.
+La tab **Comparativa** muestra, por cada usuario que haya hecho al menos un test, una fila con T1/T2/T3/T4 (último de cada fase), su mejor VAM y la evolución T1 → último.
 
-Los **valores derivados** (edad, VAM, VO2max, nivel, ritmos, recuperación) NO se almacenan: se calculan en cliente desde un helper único, garantizando que cambios en la fórmula se reflejen siempre.
+La tab **Referencia** es una vista estática con las dos tablas ACSM (hombres/mujeres) y el bloque de fórmulas, exactamente como la hoja del Excel.
 
-### RLS
+## Cambios de base de datos
 
-- `cooper_tests`:
-  - SELECT: cualquier autenticado (los usuarios necesitan leer la fecha/nombre del test al que pertenecen sus resultados).
-  - INSERT/UPDATE/DELETE: `is_coach_or_admin(auth.uid())`.
-- `cooper_results`:
-  - SELECT: `auth.uid() = user_id OR is_superadmin(auth.uid()) OR (is_coach_or_admin(auth.uid()) AND coach_has_user(auth.uid(), user_id))`.
-  - INSERT/UPDATE/DELETE: `is_coach_or_admin(auth.uid())` (los usuarios normales **no** introducen resultados; los registra el entrenador).
+Añadir a `cooper_tests` la columna `fase` para etiquetar cada sesión:
 
-Esto cumple la restricción crítica: un usuario normal nunca puede listar marcas ajenas porque la propia política filtra por `user_id`.
+```sql
+create type cooper_fase as enum ('inicial','mesociclo_1','mesociclo_2','pre_examen');
+alter table public.cooper_tests
+  add column fase cooper_fase not null default 'inicial';
+```
 
-## Lógica de cálculo (`src/lib/cooper.ts`)
+No se añaden tablas nuevas. Las RLS existentes siguen siendo válidas.
 
-Helper puro y testeable, fuente única de verdad:
+## Tabla del test (replica exacta de las columnas del Excel)
 
-- `calcularEdad(fechaNac, fechaTest)` → años cumplidos a la fecha del test.
-- `calcularVAM(distancia)` → `distancia / 200` (km/h).
-- `calcularVO2max(distancia, sexo)` → hombre: `d*0.0225 - 11.3`; mujer: `d*0.020 - 7.5`; redondeo 1 decimal.
-- `clasificarNivel(vo2max, sexo, edad)` → tabla central con franjas por edad (`<25`, `25-34`, `35-44`, `45+`) y sexo, devuelve `"EXCELENTE" | "MUY BUENO" | "BUENO" | "ACEPTABLE" | "REGULAR" | "BAJO"`.
-- `calcularRitmos(vam)` → para R-Umbral (0.85), Billat (1.00) y Zona 1 (0.67) devuelve `{ minPorKm, segPor400 }` con `60/v` y `1440/v`, formateados `mm:ss`.
-- `clasificarRecuperacion(segundos)` → `<90 EXCELENTE`, `≤180 NORMAL`, `>180 LENTA`.
+Columnas mostradas, en este orden:
 
-Las tablas de umbrales se exportan como constante `NIVELES_VO2` para que sean configurables en un único punto.
+```
+Nº | NOMBRE | SEXO | F.NACIMIENTO | EDAD | CUERPO | PESO(kg) | DISTANCIA(m) |
+VAM(km/h) | VO2max | VO2max ajust. sexo | NIVEL(edad+sexo) |
+R-Umbral min/km | R-Umbral seg/400 | Billat min/km | Billat seg/400 |
+Zona1 min/km | Zona1 seg/400 | FC Meta | FC 60s | t<100 lpm (s) | HRR | Observaciones
+```
 
-## UI
+- **NOMBRE**: select de usuario (combobox con búsqueda) entre los atletas que ve el coach (sus asignados) o todos (superadmin). No hay campo de texto libre.
+- **SEXO, F.NACIMIENTO, CUERPO, PESO**: se prerrellenan al seleccionar el usuario:
+  - `sexo` y `fecha_nacimiento` ← `profiles`
+  - `peso` ← `profiles.peso`
+  - `cuerpo` ← nombre de la primera oposición asignada en `user_oposiciones` → `oposiciones.nombre`. Si no tiene oposición, queda vacío.
+  - **Todos editables in-line** y se guardan en la fila de `cooper_results` (los campos ya existen en la tabla). El perfil no se modifica.
+- **EDAD, VAM, VO2max, NIVEL, ritmos, HRR**: calculados en cliente con `src/lib/cooper.ts` (no se almacenan).
+- **DISTANCIA, FC Meta, FC 60s, t<100, Observaciones**: input directo.
 
-Ruta nueva `/app/cooper` con dos vistas según rol:
+Edición tipo hoja: cada celda editable es un input que guarda en `onBlur` (debounce). Botón "+ Añadir participante" añade fila vacía con selector de usuario al inicio. Botón papelera por fila con confirmación.
 
-### Entrenador / Superadmin — `Cooper.tsx`
-- **Listado de tests**: tabla con nombre, fecha, temperatura, nº participantes, acciones (editar / eliminar con `AlertDialog` de confirmación / abrir).
-- **Crear/editar test** (Dialog): nombre, fecha, temperatura, condiciones, notas.
-- **Detalle del test** (Dialog o vista expandida):
-  - Tabla de participantes con columnas calculadas en vivo (edad, VAM, VO2max, nivel, ritmos, recuperación).
-  - Botón "Añadir resultado" → selector de usuario (de `profiles` filtrado por `coach_assignments` para entrenador, todos para superadmin) + formulario con los campos manuales. Los valores derivados se previsualizan en el formulario mientras se escribe.
-  - Editar/eliminar resultado (con confirmación).
-  - **Resumen del test**: cards con media de distancia, VAM, VO2max; máx/mín distancia.
+## Fórmulas (replica literal del Excel)
 
-### Usuario normal — misma ruta, vista distinta
-- **Mis tests de Cooper**: lista cronológica de sus propios `cooper_results`, cada fila muestra fecha del test, distancia, VAM, VO2max, nivel, ritmos, recuperación.
-- **Bloque "Mi evolución"**:
-  - KPIs: mejor distancia, mejor VAM, primer vs último test (delta).
-  - Gráfica de evolución (reutilizando `MetricsChart`) con distancia y VO2max en el tiempo.
-- No ve ningún dato de otros usuarios. Sin selector de usuario. Sin botones de creación.
+Ya están en `src/lib/cooper.ts`, coinciden 1:1 con las del Excel:
 
-### Sidebar
-Añadir entrada "Test de Cooper" con icono `Timer` o `Activity`:
-- En `userItems` como "Mis tests de Cooper".
-- En `coachItems` y `adminItems` como "Test de Cooper".
+| Cálculo | Fórmula |
+|---|---|
+| Edad | `DATEDIF(fNac, fechaTest, "Y")` |
+| VAM | `distancia / 200` (2 decimales) |
+| VO2max H | `distancia × 0.0225 − 11.3` (1 decimal) |
+| VO2max M | `distancia × 0.0200 − 7.5` (1 decimal) |
+| R-Umbral min/km | `60 / (VAM × 0.85)` formato `m:ss` |
+| R-Umbral seg/400 | `1440 / (VAM × 0.85)` redondeado + "s" |
+| Billat min/km | `60 / VAM` formato `m:ss` |
+| Billat seg/400 | `1440 / VAM` redondeado + "s" |
+| Zona 1 min/km | `60 / (VAM × 0.67)` formato `m:ss` |
+| Zona 1 seg/400 | `1440 / (VAM × 0.67)` redondeado + "s" |
+| HRR | `<90` ⚡ EXCELENTE · `≤180` ✓ NORMAL · `>180` ⚠ LENTA |
+| NIVEL | tabla ACSM por edad y sexo (ya implementada en `NIVELES_VO2`) |
 
-### Routing
-Registrar `/app/cooper` en `App.tsx` apuntando a `Cooper.tsx`. La página decide la vista según `primaryRole`.
+Ajustes a `src/lib/cooper.ts` para fidelidad:
+- Cambiar formato min/km de `m:ss` actual a string `m:ss` sin "h:" (ya está bien) y verificar redondeo.
+- Añadir emojis al HRR (⚡ / ✓ / ⚠) como en el Excel.
 
-## Validaciones
-- `distancia_m` requerido y > 0.
-- `fecha_nacimiento` requerida (necesaria para la edad y por tanto el nivel).
-- `sexo` requerido (necesario para VO2max y nivel).
-- `fc_final`, `fc_60s` opcionales pero positivos si se introducen.
-- `tiempo_bajo_100_seg` opcional; si está vacío no se muestra recuperación.
+## Tab Comparativa
 
-## Detalles técnicos
+Para cada usuario con resultados:
 
-- Migración SQL nueva con las dos tablas + RLS.
-- Nuevo helper `src/lib/cooper.ts` con todas las fórmulas y constantes de umbrales (testeable, sin dependencias React).
-- Nueva página `src/pages/Cooper.tsx` que ramifica por rol.
-- Actualización de `src/App.tsx` (ruta) y `src/components/AppSidebar.tsx` (entrada de menú en los tres role-sets).
-- No se tocan tablas existentes ni RLS existentes.
-- No se requieren edge functions (todo client-side + RLS).
-- Reutilización de componentes UI existentes (`Card`, `Dialog`, `AlertDialog`, `Table`, `Select`, `MetricsChart`).
+```
+Nº | Nombre | Sexo | Edad | Cuerpo | T1 Dist | T1 VAM | T2 Dist | T2 VAM | T3 Dist | T3 VAM | T4 Dist | T4 VAM | Mejor VAM | Evolución T1→último
+```
+
+- Para cada fase se toma el **último** `cooper_result` del usuario en un test de esa fase.
+- "Mejor VAM" = max VAM de todos sus resultados.
+- "Evolución" = `(últimoVAM − T1VAM) / T1VAM × 100` con flecha ↑/↓.
+- Filas con celdas vacías (`—`) si el usuario no tiene resultado en esa fase.
+
+## Tab Referencia
+
+Componente estático con las dos tablas ACSM y el bloque de fórmulas tal como aparecen en la hoja REFERENCIA del Excel. Es texto/markup, sin interacción.
+
+## Vista del usuario (rol `usuario`)
+
+Sin cambios de estructura. Sigue viendo "Mis tests de Cooper" con sus filas, KPIs y gráfica de evolución (lo que ya existe). RLS garantiza que solo ve los suyos.
+
+## Selector de fase al crear test
+
+Al crear/editar un test, además de nombre/fecha/temp/condiciones, se elige la **fase** (Inicial / Meso 1 / Meso 2 / Pre-Examen). Esto determina en qué tab aparece.
 
 ## Archivos afectados
 
-- **Crear**: `supabase/migrations/<timestamp>_cooper.sql`, `src/lib/cooper.ts`, `src/pages/Cooper.tsx`.
-- **Editar**: `src/App.tsx`, `src/components/AppSidebar.tsx`.
+- **Migración nueva**: añadir enum `cooper_fase` y columna `fase` a `cooper_tests`.
+- **Editar `src/lib/cooper.ts`**: añadir emojis al HRR, asegurar formato `m:ss` exacto.
+- **Reescribir `src/pages/Cooper.tsx`**: estructura con 6 tabs (Test 1/2/3/4/Comparativa/Referencia), tabla editable inline con prerrelleno desde perfil + oposición, vista comparativa y vista referencia. Vista de usuario se mantiene tal cual.
+- **No se tocan**: RLS, `App.tsx`, `AppSidebar.tsx`.
+
+## Detalles técnicos
+
+- Para prerrellenar al seleccionar usuario: una sola query `profiles + user_oposiciones(oposiciones(nombre))` cacheada al cargar la página.
+- La tabla usa los componentes existentes `Table`, `Input`, `Select`, `Combobox` (basado en `Command` + `Popover`).
+- Guardado por celda con debounce 600 ms para evitar guardado en cada tecla.
+- Cálculos puros en cliente, recalculados en cada render con `useMemo` por fila.

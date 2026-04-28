@@ -103,6 +103,22 @@ export function clasificarRecuperacion(seg: number | null | undefined): Recupera
   return "LENTA";
 }
 
+export function recuperacionLabel(rec: Recuperacion | null): string {
+  if (rec === "EXCELENTE") return "⚡ EXCELENTE";
+  if (rec === "NORMAL") return "✓ NORMAL";
+  if (rec === "LENTA") return "⚠ LENTA";
+  return "—";
+}
+
+/** Fase del test, equivalente a las 4 hojas del Excel. */
+export type CooperFase = "inicial" | "mesociclo_1" | "mesociclo_2" | "pre_examen";
+export const FASES: { id: CooperFase; label: string; short: string }[] = [
+  { id: "inicial", label: "Test 1 — Inicial", short: "T1" },
+  { id: "mesociclo_1", label: "Test 2 — Fin Mesociclo 1", short: "T2" },
+  { id: "mesociclo_2", label: "Test 3 — Fin Mesociclo 2", short: "T3" },
+  { id: "pre_examen", label: "Test 4 — Pre-Examen", short: "T4" },
+];
+
 export interface CooperDerivados {
   edad: number | null;
   vam: number | null;
