@@ -27,7 +27,7 @@ export default function Usuarios() {
   const [userRoles, setUserRoles] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" as "masculino" | "femenino" });
+  const [form, setForm] = useState({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" as "masculino" | "femenino", fecha_nacimiento: "", peso: "", altura: "" });
   const [search, setSearch] = useState("");
   const [routineDialog, setRoutineDialog] = useState<{ open: boolean; userId: string }>({ open: false, userId: "" });
   const [routineForm, setRoutineForm] = useState({ routine_id: "", fecha_inicio: "", fecha_fin: "" });
