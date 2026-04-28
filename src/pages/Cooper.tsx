@@ -41,6 +41,7 @@ interface CooperResult {
   id: string; test_id: string; user_id: string; sexo: Sexo;
   fecha_nacimiento: string | null; cuerpo: string | null; peso: number | null;
   distancia_m: number; fc_final: number | null; fc_60s: number | null;
+  fc_meta: number | null;
   tiempo_bajo_100_seg: number | null; observaciones: string | null;
 }
 interface ProfileLite {
@@ -333,25 +334,38 @@ function TestCard({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">Nº</TableHead>
-                  <TableHead className="min-w-[180px]">NOMBRE</TableHead>
-                  <TableHead>SEXO</TableHead>
-                  <TableHead className="min-w-[140px]">F. NAC.</TableHead>
-                  <TableHead>EDAD</TableHead>
-                  <TableHead className="min-w-[120px]">CUERPO</TableHead>
-                  <TableHead>PESO</TableHead>
-                  <TableHead>DIST. (m)</TableHead>
-                  <TableHead>VAM</TableHead>
-                  <TableHead>VO2max</TableHead>
-                  <TableHead>NIVEL</TableHead>
-                  <TableHead>R-Umbral</TableHead>
-                  <TableHead>Billat</TableHead>
-                  <TableHead>Zona 1</TableHead>
-                  <TableHead>FC 60s</TableHead>
-                  <TableHead>t&lt;100</TableHead>
-                  <TableHead>HRR</TableHead>
-                  <TableHead className="min-w-[160px]">OBSERVACIONES</TableHead>
-                  <TableHead></TableHead>
+                  {/* Identificación — gris oscuro */}
+                  <TableHead className="w-10 bg-neutral-700 text-white text-center">Nº</TableHead>
+                  <TableHead className="min-w-[180px] bg-neutral-700 text-white text-center">NOMBRE</TableHead>
+                  {/* Datos personales — naranja claro */}
+                  <TableHead className="bg-orange-200 text-neutral-900 text-center">SEXO</TableHead>
+                  <TableHead className="min-w-[140px] bg-orange-200 text-neutral-900 text-center">F. NACIMIENTO</TableHead>
+                  <TableHead className="bg-orange-200 text-neutral-900 text-center">EDAD</TableHead>
+                  <TableHead className="min-w-[120px] bg-orange-200 text-neutral-900 text-center">CUERPO</TableHead>
+                  <TableHead className="bg-orange-200 text-neutral-900 text-center">PESO (kg)</TableHead>
+                  {/* Resultado y VO2 — azul */}
+                  <TableHead className="bg-blue-300 text-neutral-900 text-center">DISTANCIA (m)</TableHead>
+                  <TableHead className="bg-blue-300 text-neutral-900 text-center">VAM (km/h)</TableHead>
+                  <TableHead className="bg-blue-300 text-neutral-900 text-center">VO2max (ml/kg/min)</TableHead>
+                  <TableHead className="bg-blue-300 text-neutral-900 text-center">VO2max AJUSTADO SEXO</TableHead>
+                  <TableHead className="bg-blue-300 text-neutral-900 text-center">NIVEL (edad + sexo)</TableHead>
+                  {/* R-Umbral — naranja */}
+                  <TableHead className="bg-orange-300 text-neutral-900 text-center">R-UMBRAL (min/km)</TableHead>
+                  <TableHead className="bg-orange-300 text-neutral-900 text-center">R-UMBRAL (seg/400 m)</TableHead>
+                  {/* Billat — verde */}
+                  <TableHead className="bg-green-300 text-neutral-900 text-center">BILLAT (min/km)</TableHead>
+                  <TableHead className="bg-green-300 text-neutral-900 text-center">BILLAT (seg/400 m)</TableHead>
+                  {/* Zona 1 — azul claro */}
+                  <TableHead className="bg-sky-200 text-neutral-900 text-center">ZONA 1 (min/km)</TableHead>
+                  <TableHead className="bg-sky-200 text-neutral-900 text-center">ZONA 1 (seg/400 m)</TableHead>
+                  {/* FC y recuperación — rojo claro */}
+                  <TableHead className="bg-red-200 text-neutral-900 text-center">FC Meta</TableHead>
+                  <TableHead className="bg-red-200 text-neutral-900 text-center">FC 60s</TableHead>
+                  <TableHead className="bg-red-200 text-neutral-900 text-center">t&lt;100 lpm (s)</TableHead>
+                  <TableHead className="bg-red-200 text-neutral-900 text-center">HRR (Recup.)</TableHead>
+                  {/* Observaciones — gris */}
+                  <TableHead className="min-w-[160px] bg-neutral-200 text-neutral-900 text-center">OBSERVACIONES</TableHead>
+                  <TableHead className="bg-neutral-200"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
