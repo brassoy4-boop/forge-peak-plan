@@ -264,9 +264,16 @@ export default function Chat() {
               {convs.map(c => {
                 const oid = otherIdOf(c);
                 const other = profilesMap[oid];
+                const unread = unreadByConv[c.id] ?? 0;
+                const isSel = selected?.id === c.id;
                 return (
-                  <button key={c.id} onClick={() => setSelected(c)} className={`w-full text-left p-2 rounded text-sm ${selected?.id === c.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-                    {other ? `${other.nombre} ${other.apellidos}` : "—"}
+                  <button key={c.id} onClick={() => setSelected(c)} className={`w-full text-left p-2 rounded text-sm flex items-center justify-between gap-2 ${isSel ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                    <span className={unread > 0 && !isSel ? "font-semibold" : ""}>
+                      {other ? `${other.nombre} ${other.apellidos}` : "—"}
+                    </span>
+                    {unread > 0 && !isSel && (
+                      <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-[10px]">{unread > 99 ? "99+" : unread}</Badge>
+                    )}
                   </button>
                 );
               })}
