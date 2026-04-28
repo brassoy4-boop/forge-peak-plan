@@ -1291,6 +1291,13 @@ export type Database = {
         Args: { _coach_id: string; _user_id: string }
         Returns: boolean
       }
+      get_feature_flags: {
+        Args: never
+        Returns: {
+          key: string
+          value: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
