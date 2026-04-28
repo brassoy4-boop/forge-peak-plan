@@ -16,6 +16,9 @@ interface Body {
   sexo?: "masculino" | "femenino" | "unisex" | null;
   role?: "usuario" | "entrenador";
   assign_to_caller?: boolean;
+  fecha_nacimiento?: string | null;
+  peso?: number | null;
+  altura?: number | null;
 }
 
 Deno.serve(async (req) => {
