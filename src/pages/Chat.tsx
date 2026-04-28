@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MessageSquare, Search } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 interface ProfileLite {
@@ -26,6 +27,7 @@ export default function Chat() {
   const [contacts, setContacts] = useState<ProfileLite[]>([]);
   const [contactSearch, setContactSearch] = useState("");
   const [rolesByUser, setRolesByUser] = useState<Record<string, string[]>>({});
+  const [unreadByConv, setUnreadByConv] = useState<Record<string, number>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const loadConvs = async () => {
@@ -40,10 +42,40 @@ export default function Chat() {
     const ids = Array.from(new Set(list.flatMap((c: any) => [c.user_id, c.coach_id])));
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
-      const m: Record<string, ProfileLite> = { ...profilesMap };
-      (profs ?? []).forEach((p: any) => { m[p.user_id] = { ...m[p.user_id], ...p }; });
-      setProfilesMap(m);
+      setProfilesMap((prev) => {
+        const m = { ...prev };
+        (profs ?? []).forEach((p: any) => { m[p.user_id] = { ...m[p.user_id], ...p }; });
+        return m;
+      });
     }
+    // Conteo de no leídos por conversación
+    if (list.length) {
+      const convIds = list.map((c: any) => c.id);
+      const { data: unread } = await supabase
+        .from("private_messages")
+        .select("conversation_id")
+        .in("conversation_id", convIds)
+        .neq("sender_id", user.id)
+        .eq("leido", false);
+      const counts: Record<string, number> = {};
+      (unread ?? []).forEach((m: any) => {
+        counts[m.conversation_id] = (counts[m.conversation_id] ?? 0) + 1;
+      });
+      setUnreadByConv(counts);
+    } else {
+      setUnreadByConv({});
+    }
+  };
+
+  const markConvRead = async (convId: string) => {
+    if (!user) return;
+    await supabase
+      .from("private_messages")
+      .update({ leido: true })
+      .eq("conversation_id", convId)
+      .neq("sender_id", user.id)
+      .eq("leido", false);
+    setUnreadByConv((prev) => ({ ...prev, [convId]: 0 }));
   };
 
   // Carga de contactos disponibles según rol
@@ -98,19 +130,40 @@ export default function Chat() {
 
   useEffect(() => { loadConvs(); loadContacts(); /* eslint-disable-next-line */ }, [user, primaryRole]);
 
+  // Realtime global: cuando llega cualquier mensaje nuevo, refresca conversaciones/no leídos
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`pm-global-${user.id}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "private_messages" },
+        () => { loadConvs(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
+  }, [user]);
+
   useEffect(() => {
     if (!selected) return;
     supabase.from("private_messages").select("*").eq("conversation_id", selected.id).order("created_at")
       .then(({ data }) => setMessages(data ?? []));
+    markConvRead(selected.id);
 
     const channel = supabase
       .channel(`pm-${selected.id}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "private_messages", filter: `conversation_id=eq.${selected.id}` },
-        (payload) => setMessages((prev) => prev.some((m) => m.id === (payload.new as any).id) ? prev : [...prev, payload.new as any]),
+        (payload) => {
+          const msg = payload.new as any;
+          setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+          // Si el mensaje no es mío, marcarlo como leído inmediatamente
+          if (msg.sender_id !== user?.id) markConvRead(selected.id);
+        },
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
   }, [selected]);
 
   useEffect(() => {
@@ -211,9 +264,16 @@ export default function Chat() {
               {convs.map(c => {
                 const oid = otherIdOf(c);
                 const other = profilesMap[oid];
+                const unread = unreadByConv[c.id] ?? 0;
+                const isSel = selected?.id === c.id;
                 return (
-                  <button key={c.id} onClick={() => setSelected(c)} className={`w-full text-left p-2 rounded text-sm ${selected?.id === c.id ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-                    {other ? `${other.nombre} ${other.apellidos}` : "—"}
+                  <button key={c.id} onClick={() => setSelected(c)} className={`w-full text-left p-2 rounded text-sm flex items-center justify-between gap-2 ${isSel ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
+                    <span className={unread > 0 && !isSel ? "font-semibold" : ""}>
+                      {other ? `${other.nombre} ${other.apellidos}` : "—"}
+                    </span>
+                    {unread > 0 && !isSel && (
+                      <Badge variant="destructive" className="h-5 min-w-5 px-1.5 text-[10px]">{unread > 99 ? "99+" : unread}</Badge>
+                    )}
                   </button>
                 );
               })}
