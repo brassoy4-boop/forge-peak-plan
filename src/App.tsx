@@ -24,6 +24,7 @@ import CargaMasiva from "./pages/CargaMasiva";
 import Admin from "./pages/Admin";
 import Perfil from "./pages/Perfil";
 import Baremos from "./pages/Baremos";
+import Cooper from "./pages/Cooper";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="oposiciones" element={<Oposiciones />} />
               <Route path="marcas" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Marcas /></ProtectedRoute>} />
               <Route path="simulacros" element={<Simulacros />} />
+              <Route path="cooper" element={<Cooper />} />
               <Route path="ejercicios" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Ejercicios /></ProtectedRoute>} />
               <Route path="rutinas" element={<Rutinas />} />
               <Route path="diario" element={<Diario />} />
