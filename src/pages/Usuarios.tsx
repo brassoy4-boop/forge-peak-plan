@@ -65,6 +65,9 @@ export default function Usuarios() {
       body: {
         email: form.email, password: form.password, nombre: form.nombre, apellidos: form.apellidos,
         sexo: form.sexo, role: "usuario", assign_to_caller: true,
+        fecha_nacimiento: form.fecha_nacimiento || null,
+        peso: form.peso ? Number(form.peso) : null,
+        altura: form.altura ? Number(form.altura) : null,
       },
     });
     setCreating(false);
@@ -73,7 +76,7 @@ export default function Usuarios() {
     }
     toast.success("Deportista creado y asignado");
     setOpen(false);
-    setForm({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" });
+    setForm({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino", fecha_nacimiento: "", peso: "", altura: "" });
     load();
   };
 
