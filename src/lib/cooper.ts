@@ -1,6 +1,6 @@
 // Cooper test calculations — fuente única de verdad para fórmulas y umbrales.
 
-export type Sexo = "hombre" | "mujer" | "unisex";
+export type Sexo = "masculino" | "femenino" | "unisex";
 export type Nivel = "EXCELENTE" | "MUY BUENO" | "BUENO" | "ACEPTABLE" | "REGULAR" | "BAJO";
 export type Recuperacion = "EXCELENTE" | "NORMAL" | "LENTA";
 
@@ -24,7 +24,7 @@ export function calcularVAM(distanciaM: number | null | undefined): number | nul
 /** VO2max estimado, redondeado a 1 decimal */
 export function calcularVO2max(distanciaM: number | null | undefined, sexo: Sexo): number | null {
   if (!distanciaM || distanciaM <= 0) return null;
-  const v = sexo === "mujer" ? distanciaM * 0.020 - 7.5 : distanciaM * 0.0225 - 11.3;
+  const v = sexo === "femenino" ? distanciaM * 0.020 - 7.5 : distanciaM * 0.0225 - 11.3;
   return Math.round(v * 10) / 10;
 }
 
