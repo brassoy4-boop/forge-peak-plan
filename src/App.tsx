@@ -4,7 +4,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/lib/auth";
+import { FeatureFlagsProvider } from "@/lib/featureFlags";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { FeatureRoute } from "@/components/FeatureRoute";
 import AppLayout from "@/components/AppLayout";
 import AuthPage from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -36,6 +38,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+          <FeatureFlagsProvider>
           <Routes>
             <Route path="/" element={<Navigate to="/app" replace />} />
             <Route path="/auth" element={<AuthPage />} />
@@ -53,8 +56,8 @@ const App = () => (
               <Route path="personalizado" element={<Personalizado />} />
               <Route path="evolucion" element={<Evolucion />} />
               <Route path="analitica" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Evolucion /></ProtectedRoute>} />
-              <Route path="foro" element={<Foro />} />
-              <Route path="chat" element={<Chat />} />
+              <Route path="foro" element={<FeatureRoute feature="foro"><Foro /></FeatureRoute>} />
+              <Route path="chat" element={<FeatureRoute feature="chat"><Chat /></FeatureRoute>} />
               <Route path="usuarios" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Usuarios /></ProtectedRoute>} />
               
               <Route path="baremos" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Baremos /></ProtectedRoute>} />
@@ -62,6 +65,7 @@ const App = () => (
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </FeatureFlagsProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
