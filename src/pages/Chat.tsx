@@ -42,10 +42,40 @@ export default function Chat() {
     const ids = Array.from(new Set(list.flatMap((c: any) => [c.user_id, c.coach_id])));
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles").select("user_id, nombre, apellidos").in("user_id", ids);
-      const m: Record<string, ProfileLite> = { ...profilesMap };
-      (profs ?? []).forEach((p: any) => { m[p.user_id] = { ...m[p.user_id], ...p }; });
-      setProfilesMap(m);
+      setProfilesMap((prev) => {
+        const m = { ...prev };
+        (profs ?? []).forEach((p: any) => { m[p.user_id] = { ...m[p.user_id], ...p }; });
+        return m;
+      });
     }
+    // Conteo de no leídos por conversación
+    if (list.length) {
+      const convIds = list.map((c: any) => c.id);
+      const { data: unread } = await supabase
+        .from("private_messages")
+        .select("conversation_id")
+        .in("conversation_id", convIds)
+        .neq("sender_id", user.id)
+        .eq("leido", false);
+      const counts: Record<string, number> = {};
+      (unread ?? []).forEach((m: any) => {
+        counts[m.conversation_id] = (counts[m.conversation_id] ?? 0) + 1;
+      });
+      setUnreadByConv(counts);
+    } else {
+      setUnreadByConv({});
+    }
+  };
+
+  const markConvRead = async (convId: string) => {
+    if (!user) return;
+    await supabase
+      .from("private_messages")
+      .update({ leido: true })
+      .eq("conversation_id", convId)
+      .neq("sender_id", user.id)
+      .eq("leido", false);
+    setUnreadByConv((prev) => ({ ...prev, [convId]: 0 }));
   };
 
   // Carga de contactos disponibles según rol
