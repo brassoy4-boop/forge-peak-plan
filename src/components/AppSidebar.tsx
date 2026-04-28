@@ -6,7 +6,7 @@ import {
 import {
   LayoutDashboard, Users, Trophy, Target, Dumbbell, ClipboardList, BookOpen,
   FileText, MessageSquare, MessagesSquare, BarChart3, Upload, Settings, LogOut,
-  Activity, ListChecks, FolderTree, Gauge,
+  Activity, ListChecks, FolderTree, Gauge, Timer,
 } from "lucide-react";
 import { useAuth, AppRole } from "@/lib/auth";
 import { Brand } from "@/components/Brand";
@@ -18,6 +18,7 @@ const userItems: Item[] = [
   { title: "Mi panel", url: "/app", icon: LayoutDashboard },
   { title: "Mis oposiciones", url: "/app/oposiciones", icon: Trophy },
   { title: "Mis simulacros", url: "/app/simulacros", icon: Target },
+  { title: "Mis tests de Cooper", url: "/app/cooper", icon: Timer },
   { title: "Mis rutinas", url: "/app/rutinas", icon: Dumbbell },
   { title: "Mi diario", url: "/app/diario", icon: BookOpen },
   { title: "Personalizado", url: "/app/personalizado", icon: FileText },
@@ -33,6 +34,7 @@ const coachItems: Item[] = [
   { title: "Marcas", url: "/app/marcas", icon: ListChecks },
   { title: "Baremos", url: "/app/baremos", icon: Gauge },
   { title: "Simulacros", url: "/app/simulacros", icon: Target },
+  { title: "Test de Cooper", url: "/app/cooper", icon: Timer },
   { title: "Ejercicios", url: "/app/ejercicios", icon: Activity },
   { title: "Rutinas", url: "/app/rutinas", icon: Dumbbell },
   { title: "Diario", url: "/app/diario", icon: BookOpen },
