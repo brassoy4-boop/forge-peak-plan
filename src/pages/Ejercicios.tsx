@@ -153,8 +153,8 @@ export default function Ejercicios() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visible.map((ex) => (
           <Card key={ex.id} className="overflow-hidden">
-            <div className="aspect-video bg-muted flex items-center justify-center">
-              {ex.imagen_url ? <img src={ex.imagen_url} alt={ex.nombre} className="w-full h-full object-cover" /> : <ImageIcon className="h-10 w-10 text-muted-foreground" />}
+            <div className="h-56 bg-muted flex items-center justify-center overflow-hidden">
+              {ex.imagen_url ? <img src={ex.imagen_url} alt={ex.nombre} className="max-w-full max-h-full object-contain" /> : <ImageIcon className="h-10 w-10 text-muted-foreground" />}
             </div>
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
