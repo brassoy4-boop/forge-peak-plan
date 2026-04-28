@@ -39,7 +39,7 @@ const coachItems: Item[] = [
   { title: "Rutinas", url: "/app/rutinas", icon: Dumbbell },
   { title: "Diario", url: "/app/diario", icon: BookOpen },
   { title: "Personalizado", url: "/app/personalizado", icon: FileText },
-  { title: "Carga masiva", url: "/app/carga-masiva", icon: Upload },
+  
   { title: "Foro", url: "/app/foro", icon: MessagesSquare },
   { title: "Chat", url: "/app/chat", icon: MessageSquare },
   { title: "Analítica", url: "/app/analitica", icon: BarChart3 },
