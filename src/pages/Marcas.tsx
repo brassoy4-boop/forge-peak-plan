@@ -8,9 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Archive, Power } from "lucide-react";
+import { Plus, Pencil, Archive, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface MarkCategory { id: string; nombre: string; orden: number; status: string; }
@@ -28,6 +32,7 @@ export default function Marcas() {
   const [marks, setMarks] = useState<Mark[]>([]);
   const [openCat, setOpenCat] = useState(false);
   const [openMark, setOpenMark] = useState(false);
+  const [editingCat, setEditingCat] = useState<MarkCategory | null>(null);
   const [catForm, setCatForm] = useState({ nombre: "" });
   const [editingMark, setEditingMark] = useState<Mark | null>(null);
   const [markForm, setMarkForm] = useState({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
@@ -45,11 +50,34 @@ export default function Marcas() {
   };
   useEffect(() => { load(); }, []);
 
+  const openCatDialog = (c?: MarkCategory) => {
+    if (c) { setEditingCat(c); setCatForm({ nombre: c.nombre }); }
+    else { setEditingCat(null); setCatForm({ nombre: "" }); }
+    setOpenCat(true);
+  };
+
   const saveCat = async () => {
     if (!catForm.nombre.trim()) return;
-    const { error } = await supabase.from("mark_categories").insert({ nombre: catForm.nombre });
+    if (editingCat) {
+      const { error } = await supabase.from("mark_categories").update({ nombre: catForm.nombre }).eq("id", editingCat.id);
+      if (error) return toast.error(error.message);
+      toast.success("Categoría actualizada");
+    } else {
+      const { error } = await supabase.from("mark_categories").insert({ nombre: catForm.nombre });
+      if (error) return toast.error(error.message);
+      toast.success("Categoría creada");
+    }
+    setOpenCat(false); setEditingCat(null); setCatForm({ nombre: "" }); load();
+  };
+
+  const deleteCat = async (c: MarkCategory) => {
+    const enUso = marks.some((m) => m.category_id === c.id);
+    if (enUso) {
+      return toast.error("No puedes eliminar una categoría con marcas asociadas. Reasigna o elimina las marcas primero.");
+    }
+    const { error } = await supabase.from("mark_categories").delete().eq("id", c.id);
     if (error) return toast.error(error.message);
-    toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
+    toast.success("Categoría eliminada"); load();
   };
 
   const openMarkDialog = (m?: Mark) => {
@@ -97,10 +125,10 @@ export default function Marcas() {
         actions={
           isCoach && (
             <div className="flex gap-2">
-              <Dialog open={openCat} onOpenChange={setOpenCat}>
-                <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" /> Categoría</Button></DialogTrigger>
+              <Dialog open={openCat} onOpenChange={(o) => { setOpenCat(o); if (!o) { setEditingCat(null); setCatForm({ nombre: "" }); } }}>
+                <DialogTrigger asChild><Button variant="outline" onClick={() => openCatDialog()}><Plus className="mr-2 h-4 w-4" /> Categoría</Button></DialogTrigger>
                 <DialogContent>
-                  <DialogHeader><DialogTitle>Nueva categoría</DialogTitle></DialogHeader>
+                  <DialogHeader><DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle></DialogHeader>
                   <div className="space-y-2"><Label>Nombre</Label><Input value={catForm.nombre} onChange={(e) => setCatForm({ nombre: e.target.value })} /></div>
                   <DialogFooter><Button onClick={saveCat}>Guardar</Button></DialogFooter>
                 </DialogContent>
@@ -137,6 +165,52 @@ export default function Marcas() {
           )
         }
       />
+      {isCoach && (
+        <Card className="mb-4">
+          <CardHeader><CardTitle>Categorías ({cats.length})</CardTitle></CardHeader>
+          <CardContent>
+            {cats.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay categorías. Crea una con el botón "Categoría".</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {cats.map((c) => {
+                  const count = marks.filter((m) => m.category_id === c.id).length;
+                  return (
+                    <div key={c.id} className="flex items-center gap-1 border rounded-md pl-3 pr-1 py-1 bg-muted/30">
+                      <span className="text-sm font-medium">{c.nombre}</span>
+                      <Badge variant="outline" className="text-xs">{count}</Badge>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openCatDialog(c)} title="Editar">
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Eliminar">
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar categoría "{c.nombre}"?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {count > 0
+                                ? `No se puede eliminar: tiene ${count} marca(s) asociada(s). Reasígnalas o elimínalas primero.`
+                                : "Esta acción no se puede deshacer."}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteCat(c)} disabled={count > 0}>Eliminar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader><CardTitle>Marcas configuradas ({marks.length})</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
