@@ -20,7 +20,7 @@ import Evolucion from "./pages/Evolucion";
 import Foro from "./pages/Foro";
 import Chat from "./pages/Chat";
 import Usuarios from "./pages/Usuarios";
-import CargaMasiva from "./pages/CargaMasiva";
+
 import Admin from "./pages/Admin";
 import Perfil from "./pages/Perfil";
 import Baremos from "./pages/Baremos";
@@ -56,7 +56,7 @@ const App = () => (
               <Route path="foro" element={<Foro />} />
               <Route path="chat" element={<Chat />} />
               <Route path="usuarios" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Usuarios /></ProtectedRoute>} />
-              <Route path="carga-masiva" element={<ProtectedRoute allow={["entrenador","superadmin"]}><CargaMasiva /></ProtectedRoute>} />
+              
               <Route path="baremos" element={<ProtectedRoute allow={["entrenador","superadmin"]}><Baremos /></ProtectedRoute>} />
               <Route path="admin" element={<ProtectedRoute allow={["superadmin"]}><Admin /></ProtectedRoute>} />
             </Route>
