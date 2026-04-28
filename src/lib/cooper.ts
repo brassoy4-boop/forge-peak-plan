@@ -68,8 +68,9 @@ export function clasificarNivel(vo2max: number | null, sexo: Sexo, edad: number 
 export interface Ritmo { minPorKm: string; segPor400: string; }
 
 function fmtMinSec(totalSeg: number): string {
+  // Excel trunca los segundos (no redondea) al mostrar formato m:ss
   const m = Math.floor(totalSeg / 60);
-  const s = Math.round(totalSeg % 60);
+  const s = Math.floor(totalSeg % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
