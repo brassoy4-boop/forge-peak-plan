@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Save, ShieldAlert, Plus, Loader2 } from "lucide-react";
+import { Save, ShieldAlert, Plus, Loader2, ToggleRight } from "lucide-react";
+import { useFeatureFlags } from "@/lib/featureFlags";
 
 export default function Admin() {
+  const { flags, refresh: refreshFlags } = useFeatureFlags();
   const [pin, setPin] = useState("");
   const [profiles, setProfiles] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -61,6 +64,15 @@ export default function Admin() {
     load();
   };
 
+  const toggleFeature = async (key: "feature_foro" | "feature_chat", enabled: boolean) => {
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert({ key, value: enabled ? "true" : "false", updated_at: new Date().toISOString() }, { onConflict: "key" });
+    if (error) return toast.error(error.message);
+    toast.success(`${key === "feature_foro" ? "Foro" : "Chat"} ${enabled ? "habilitado" : "deshabilitado"}`);
+    refreshFlags();
+  };
+
   const mainRoleOf = (uid: string) => {
     const list = roles.filter((x) => x.user_id === uid).map((x) => x.role);
     if (list.includes("superadmin")) return "superadmin";
@@ -71,6 +83,28 @@ export default function Admin() {
   return (
     <div>
       <PageHeader title="Configuración" description="PIN global, entrenadores, roles y permisos." />
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><ToggleRight className="h-5 w-5 text-primary" /> Funcionalidades</CardTitle>
+          <CardDescription>Habilita o deshabilita módulos para todos los usuarios.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base">Foro</Label>
+              <p className="text-sm text-muted-foreground">Permite crear hilos y mensajes en el foro.</p>
+            </div>
+            <Switch checked={flags.foro} onCheckedChange={(v) => toggleFeature("feature_foro", v)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base">Chat</Label>
+              <p className="text-sm text-muted-foreground">Permite la mensajería privada entre usuarios y entrenadores.</p>
+            </div>
+            <Switch checked={flags.chat} onCheckedChange={(v) => toggleFeature("feature_chat", v)} />
+          </div>
+        </CardContent>
+      </Card>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardHeader>
