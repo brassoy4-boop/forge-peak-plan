@@ -381,7 +381,7 @@ function TestCard({
                   />
                 ))}
                 {results.length === 0 && (
-                  <TableRow><TableCell colSpan={19} className="text-center text-muted-foreground py-4">
+                  <TableRow><TableCell colSpan={24} className="text-center text-muted-foreground py-4">
                     Sin participantes. Añade uno abajo.
                   </TableCell></TableRow>
                 )}
@@ -462,19 +462,26 @@ function ParticipantRow({
       <TableCell>
         <CellInput type="number" value={r.distancia_m ? r.distancia_m.toString() : ""} onCommit={(v) => onUpdate({ distancia_m: v ? Number(v) : 0 })} className="w-24" />
       </TableCell>
-      <TableCell className="text-sm">{d.vam ?? "—"}</TableCell>
-      <TableCell className="text-sm">{d.vo2max ?? "—"}</TableCell>
-      <TableCell>{d.nivel && <Badge variant="outline" className={nivelColor(d.nivel)}>{d.nivel}</Badge>}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{d.ritmos ? `${d.ritmos.rUmbral.minPorKm} · ${d.ritmos.rUmbral.segPor400}` : "—"}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{d.ritmos ? `${d.ritmos.billat.minPorKm} · ${d.ritmos.billat.segPor400}` : "—"}</TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{d.ritmos ? `${d.ritmos.zona1.minPorKm} · ${d.ritmos.zona1.segPor400}` : "—"}</TableCell>
+      <TableCell className="text-sm text-center">{d.vam ?? "—"}</TableCell>
+      <TableCell className="text-sm text-center">{d.vo2max ?? "—"}</TableCell>
+      <TableCell className="text-sm text-center">{d.vo2maxAjustado ?? "—"}</TableCell>
+      <TableCell className="text-center">{d.nivel && <Badge variant="outline" className={nivelColor(d.nivel)}>{d.nivel}</Badge>}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{d.ritmos ? d.ritmos.rUmbral.minPorKm : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{d.ritmos ? d.ritmos.rUmbral.segPor400 : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{d.ritmos ? d.ritmos.billat.minPorKm : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{d.ritmos ? d.ritmos.billat.segPor400 : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{d.ritmos ? d.ritmos.zona1.minPorKm : "—"}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{d.ritmos ? d.ritmos.zona1.segPor400 : "—"}</TableCell>
+      <TableCell>
+        <CellInput type="number" value={r.fc_meta?.toString() ?? ""} onCommit={(v) => onUpdate({ fc_meta: v ? Number(v) : null })} className="w-16" />
+      </TableCell>
       <TableCell>
         <CellInput type="number" value={r.fc_60s?.toString() ?? ""} onCommit={(v) => onUpdate({ fc_60s: v ? Number(v) : null })} className="w-16" />
       </TableCell>
       <TableCell>
         <CellInput type="number" value={r.tiempo_bajo_100_seg?.toString() ?? ""} onCommit={(v) => onUpdate({ tiempo_bajo_100_seg: v ? Number(v) : null })} className="w-16" />
       </TableCell>
-      <TableCell className="text-xs whitespace-nowrap">{recuperacionLabel(d.recuperacion)}</TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-center">{recuperacionLabel(d.recuperacion)}</TableCell>
       <TableCell>
         <CellInput value={r.observaciones ?? ""} onCommit={(v) => onUpdate({ observaciones: v || null })} className="w-40" />
       </TableCell>
