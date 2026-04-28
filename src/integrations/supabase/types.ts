@@ -90,6 +90,7 @@ export type Database = {
           distancia_m: number
           fc_60s: number | null
           fc_final: number | null
+          fc_meta: number | null
           fecha_nacimiento: string | null
           id: string
           observaciones: string | null
@@ -106,6 +107,7 @@ export type Database = {
           distancia_m: number
           fc_60s?: number | null
           fc_final?: number | null
+          fc_meta?: number | null
           fecha_nacimiento?: string | null
           id?: string
           observaciones?: string | null
@@ -122,6 +124,7 @@ export type Database = {
           distancia_m?: number
           fc_60s?: number | null
           fc_final?: number | null
+          fc_meta?: number | null
           fecha_nacimiento?: string | null
           id?: string
           observaciones?: string | null

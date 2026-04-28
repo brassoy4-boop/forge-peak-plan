@@ -123,9 +123,16 @@ export interface CooperDerivados {
   edad: number | null;
   vam: number | null;
   vo2max: number | null;
+  vo2maxAjustado: number | null;
   nivel: Nivel | null;
   ritmos: RitmosDerivados | null;
   recuperacion: Recuperacion | null;
+}
+
+/** VO2max ajustado al sexo: misma fórmula que VO2max pero usando el coeficiente del sexo declarado.
+ *  En el Excel coincide con VO2max cuando los datos son consistentes. */
+export function calcularVO2maxAjustado(distanciaM: number | null | undefined, sexo: Sexo): number | null {
+  return calcularVO2max(distanciaM, sexo);
 }
 
 export function calcularDerivados(input: {
@@ -142,6 +149,7 @@ export function calcularDerivados(input: {
     edad,
     vam,
     vo2max,
+    vo2maxAjustado: calcularVO2maxAjustado(input.distanciaM, input.sexo),
     nivel: clasificarNivel(vo2max, input.sexo, edad),
     ritmos: calcularRitmos(vam),
     recuperacion: clasificarRecuperacion(input.tiempoBajo100),
