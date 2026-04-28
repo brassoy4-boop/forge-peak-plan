@@ -83,6 +83,101 @@ export type Database = {
         }
         Relationships: []
       }
+      cooper_results: {
+        Row: {
+          created_at: string
+          cuerpo: string | null
+          distancia_m: number
+          fc_60s: number | null
+          fc_final: number | null
+          fecha_nacimiento: string | null
+          id: string
+          observaciones: string | null
+          peso: number | null
+          sexo: Database["public"]["Enums"]["sexo_enum"]
+          test_id: string
+          tiempo_bajo_100_seg: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          cuerpo?: string | null
+          distancia_m: number
+          fc_60s?: number | null
+          fc_final?: number | null
+          fecha_nacimiento?: string | null
+          id?: string
+          observaciones?: string | null
+          peso?: number | null
+          sexo?: Database["public"]["Enums"]["sexo_enum"]
+          test_id: string
+          tiempo_bajo_100_seg?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          cuerpo?: string | null
+          distancia_m?: number
+          fc_60s?: number | null
+          fc_final?: number | null
+          fecha_nacimiento?: string | null
+          id?: string
+          observaciones?: string | null
+          peso?: number | null
+          sexo?: Database["public"]["Enums"]["sexo_enum"]
+          test_id?: string
+          tiempo_bajo_100_seg?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cooper_results_test_id_fkey"
+            columns: ["test_id"]
+            isOneToOne: false
+            referencedRelation: "cooper_tests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cooper_tests: {
+        Row: {
+          condiciones: string | null
+          created_at: string
+          created_by: string
+          fecha: string
+          id: string
+          nombre: string
+          notas: string | null
+          temperatura: number | null
+          updated_at: string
+        }
+        Insert: {
+          condiciones?: string | null
+          created_at?: string
+          created_by: string
+          fecha?: string
+          id?: string
+          nombre: string
+          notas?: string | null
+          temperatura?: number | null
+          updated_at?: string
+        }
+        Update: {
+          condiciones?: string | null
+          created_at?: string
+          created_by?: string
+          fecha?: string
+          id?: string
+          nombre?: string
+          notas?: string | null
+          temperatura?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       diary_entries: {
         Row: {
           comentario_entrenador: string | null
