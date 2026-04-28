@@ -130,19 +130,40 @@ export default function Chat() {
 
   useEffect(() => { loadConvs(); loadContacts(); /* eslint-disable-next-line */ }, [user, primaryRole]);
 
+  // Realtime global: cuando llega cualquier mensaje nuevo, refresca conversaciones/no leídos
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`pm-global-${user.id}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "private_messages" },
+        () => { loadConvs(); },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
+  }, [user]);
+
   useEffect(() => {
     if (!selected) return;
     supabase.from("private_messages").select("*").eq("conversation_id", selected.id).order("created_at")
       .then(({ data }) => setMessages(data ?? []));
+    markConvRead(selected.id);
 
     const channel = supabase
       .channel(`pm-${selected.id}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "private_messages", filter: `conversation_id=eq.${selected.id}` },
-        (payload) => setMessages((prev) => prev.some((m) => m.id === (payload.new as any).id) ? prev : [...prev, payload.new as any]),
+        (payload) => {
+          const msg = payload.new as any;
+          setMessages((prev) => prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]);
+          // Si el mensaje no es mío, marcarlo como leído inmediatamente
+          if (msg.sender_id !== user?.id) markConvRead(selected.id);
+        },
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line
   }, [selected]);
 
   useEffect(() => {
