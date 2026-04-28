@@ -55,7 +55,7 @@ function franjaEdad(edad: number): "<25" | "25-34" | "35-44" | "45+" {
 
 export function clasificarNivel(vo2max: number | null, sexo: Sexo, edad: number | null): Nivel | null {
   if (vo2max == null || edad == null) return null;
-  const sx: "hombre" | "mujer" = sexo === "mujer" ? "mujer" : "hombre"; // unisex => hombre por defecto
+  const sx: "hombre" | "mujer" = sexo === "femenino" ? "mujer" : "hombre"; // unisex => hombre por defecto
   const u = NIVELES_VO2[sx][franjaEdad(edad)];
   if (vo2max >= u.excelente) return "EXCELENTE";
   if (vo2max >= u.muyBueno) return "MUY BUENO";

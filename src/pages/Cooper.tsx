@@ -32,7 +32,7 @@ interface ProfileLite { user_id: string; nombre: string; apellidos: string; }
 
 const emptyTest = { nombre: "", fecha: new Date().toISOString().slice(0, 10), temperatura: "", condiciones: "", notas: "" };
 const emptyResult = {
-  user_id: "", sexo: "hombre" as Sexo, fecha_nacimiento: "", cuerpo: "", peso: "",
+  user_id: "", sexo: "masculino" as Sexo, fecha_nacimiento: "", cuerpo: "", peso: "",
   distancia_m: "", fc_final: "", fc_60s: "", tiempo_bajo_100_seg: "", observaciones: "",
 };
 
@@ -172,7 +172,6 @@ function CooperAdmin() {
   return (
     <div className="space-y-6">
       <PageHeader
-        icon={Timer}
         title="Test de Cooper"
         description="Gestión de jornadas, registro de marcas y cálculo automático de indicadores."
         actions={<Button onClick={openNewTest}><Plus className="h-4 w-4 mr-1" />Nuevo test</Button>}
@@ -281,8 +280,8 @@ function CooperAdmin() {
                 <Select value={resultForm.sexo} onValueChange={(v) => setResultForm({ ...resultForm, sexo: v as Sexo })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="hombre">Hombre</SelectItem>
-                    <SelectItem value="mujer">Mujer</SelectItem>
+                    <SelectItem value="masculino">Hombre</SelectItem>
+                    <SelectItem value="femenino">Mujer</SelectItem>
                     <SelectItem value="unisex">Unisex</SelectItem>
                   </SelectContent>
                 </Select>
@@ -388,7 +387,7 @@ function CooperUser({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
-      <PageHeader icon={Timer} title="Mis tests de Cooper" description="Tu histórico personal y evolución." />
+      <PageHeader title="Mis tests de Cooper" description="Tu histórico personal y evolución." />
 
       {enriched.length === 0 ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground">Aún no tienes resultados de Cooper registrados.</CardContent></Card>
@@ -547,7 +546,7 @@ function computeStats(rs: CooperResult[]) {
   if (rs.length === 0) return { avgDist: 0, avgVam: 0, avgVo2: 0, maxDist: 0, minDist: 0 };
   const dists = rs.map((r) => r.distancia_m);
   const vams = rs.map((r) => r.distancia_m / 200);
-  const vo2s = rs.map((r) => r.sexo === "mujer" ? r.distancia_m * 0.020 - 7.5 : r.distancia_m * 0.0225 - 11.3);
+  const vo2s = rs.map((r) => r.sexo === "femenino" ? r.distancia_m * 0.020 - 7.5 : r.distancia_m * 0.0225 - 11.3);
   const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
   return {
     avgDist: Math.round(avg(dists)),
