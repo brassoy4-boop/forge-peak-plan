@@ -1,108 +1,103 @@
-## Resumen de cambios
+# Plan: Módulo Test de Cooper
 
-Voy a abordar 10 mejoras agrupadas en estas áreas: Foro, Notificaciones, Chat, Ajustes de usuario, Roles, Usuarios, Dashboard, Rutinas, Simulacros y reseteo de contraseña.
+## Resumen funcional
 
----
+Un nuevo módulo permite a entrenadores/superadmin crear **sesiones de test de Cooper** (jornadas) y registrar dentro de cada una las marcas de múltiples usuarios. La app calcula automáticamente edad, VAM, VO2max, nivel físico, ritmos derivados y valoración de recuperación cardiaca. Cada usuario solo ve sus propios resultados e histórico; los entrenadores y el superadmin gestionan todo.
 
-### 1. Foro: respuestas a mensajes concretos + notificación al autor
+## Modelo de datos (migración)
 
-- Añadir columna `parent_id` (uuid, nullable, FK lógica a `forum_messages.id`) en `forum_messages` mediante migración.
-- En `Foro.tsx`: 
-  - Botón "Responder" en cada mensaje que fija el `parent_id` y muestra una cita previa al editor.
-  - Renderizar mensajes con un nivel de indentación cuando tienen `parent_id`, mostrando "En respuesta a {autor}: ...preview".
-  - Al enviar la respuesta, crear notificación tipo `foro` para el autor del mensaje padre (si no es uno mismo) con link `/app/foro`.
-  - También notificar al autor del hilo cuando alguien responde al hilo principal.
+Dos tablas nuevas en `public`:
 
-### 2. Notificaciones: arreglar "Marcar todas como leídas"
+**`cooper_tests`** (la sesión / jornada)
+- `id uuid pk`
+- `nombre text not null`
+- `fecha date not null`
+- `temperatura numeric null`
+- `condiciones text null`
+- `notas text null`
+- `created_by uuid not null`
+- `created_at`, `updated_at`
 
-- En `useNotifications.ts`, `markAllRead` y `markRead` actualmente actualizan la BD pero **no recargan ni mutan el estado local** hasta que llega el evento realtime. El bug se debe a que el filtro realtime en `notifications` puede no estar capturando UPDATEs (la tabla puede no estar en `supabase_realtime`).
-- Solución: tras el `update`, refrescar localmente el estado (`setItems`) sin depender de realtime, y además incluir `notifications` en la publicación realtime mediante migración (`ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` con `ALTER TABLE ... REPLICA IDENTITY FULL`).
+**`cooper_results`** (resultado de un usuario en una sesión)
+- `id uuid pk`
+- `test_id uuid not null` → `cooper_tests.id` (cascade)
+- `user_id uuid not null` (referencia al usuario existente)
+- Datos manuales: `sexo` (enum sexo_enum), `fecha_nacimiento date`, `cuerpo text`, `peso numeric`, `distancia_m integer not null`, `fc_final integer`, `fc_60s integer`, `tiempo_bajo_100_seg integer`, `observaciones text`
+- `created_at`, `updated_at`
+- Único `(test_id, user_id)` para evitar duplicados.
 
-### 3. Chat: seleccionar cualquier usuario destinatario
+Los **valores derivados** (edad, VAM, VO2max, nivel, ritmos, recuperación) NO se almacenan: se calculan en cliente desde un helper único, garantizando que cambios en la fórmula se reflejen siempre.
 
-- En `Chat.tsx`, actualmente `loadContacts` solo carga personas con `coach_assignment`. Cambiar para que:
-  - **Superadmin**: vea todos los perfiles.
-  - **Entrenador**: vea sus deportistas asignados + otros entrenadores + superadmin.
-  - **Usuario**: vea sus entrenadores asignados + superadmin + cualquier otro usuario que tenga "recibir mensajes" activado (ver punto 4).
-- El selector "Nuevo..." se sustituye por un combobox con búsqueda por nombre.
+### RLS
 
-### 4. Ajustes: opción de recibir mensajes de otros usuarios
+- `cooper_tests`:
+  - SELECT: cualquier autenticado (los usuarios necesitan leer la fecha/nombre del test al que pertenecen sus resultados).
+  - INSERT/UPDATE/DELETE: `is_coach_or_admin(auth.uid())`.
+- `cooper_results`:
+  - SELECT: `auth.uid() = user_id OR is_superadmin(auth.uid()) OR (is_coach_or_admin(auth.uid()) AND coach_has_user(auth.uid(), user_id))`.
+  - INSERT/UPDATE/DELETE: `is_coach_or_admin(auth.uid())` (los usuarios normales **no** introducen resultados; los registra el entrenador).
 
-- Añadir columna `acepta_mensajes_usuarios` (boolean, default true) en `profiles` vía migración.
-- En `Perfil.tsx`, añadir un toggle "Recibir mensajes privados de otros usuarios" (no aplica a entrenadores/superadmin, que siempre podrán escribir).
-- En `Chat.tsx` al iniciar conversación, validar:
-  - Si el remitente es usuario y el destinatario es usuario con `acepta_mensajes_usuarios = false`, bloquear con toast.
-  - Filtrar la lista de contactos disponibles aplicando esta regla.
+Esto cumple la restricción crítica: un usuario normal nunca puede listar marcas ajenas porque la propia política filtra por `user_id`.
 
-### 5. Un usuario solo puede tener un rol (Configuración)
+## Lógica de cálculo (`src/lib/cooper.ts`)
 
-- En `Admin.tsx`, sustituir la UI de "añadir rol" + badges múltiples por un único selector de rol (igual al de `Usuarios.tsx`):
-  - `Select` con valores `usuario | entrenador | superadmin`.
-  - Al cambiar: borrar todos los roles previos del usuario e insertar el nuevo (misma lógica que `setRole` en Usuarios).
-- Eliminar la posibilidad de añadir múltiples roles.
+Helper puro y testeable, fuente única de verdad:
 
-### 6. Eliminar acción "Asignar como entrenador" en /app/usuarios
+- `calcularEdad(fechaNac, fechaTest)` → años cumplidos a la fecha del test.
+- `calcularVAM(distancia)` → `distancia / 200` (km/h).
+- `calcularVO2max(distancia, sexo)` → hombre: `d*0.0225 - 11.3`; mujer: `d*0.020 - 7.5`; redondeo 1 decimal.
+- `clasificarNivel(vo2max, sexo, edad)` → tabla central con franjas por edad (`<25`, `25-34`, `35-44`, `45+`) y sexo, devuelve `"EXCELENTE" | "MUY BUENO" | "BUENO" | "ACEPTABLE" | "REGULAR" | "BAJO"`.
+- `calcularRitmos(vam)` → para R-Umbral (0.85), Billat (1.00) y Zona 1 (0.67) devuelve `{ minPorKm, segPor400 }` con `60/v` y `1440/v`, formateados `mm:ss`.
+- `clasificarRecuperacion(segundos)` → `<90 EXCELENTE`, `≤180 NORMAL`, `>180 LENTA`.
 
-- Quitar los botones `UserCheck` / `UserMinus` y la columna "Asignación" de la tabla en `Usuarios.tsx`.
-- Eliminar las funciones `assignToCoach`, `unassign`, `isMine` y los tooltips asociados.
-- (La asignación de deportistas a entrenadores se gestiona desde otra parte; si es necesario, se puede añadir más adelante).
+Las tablas de umbrales se exportan como constante `NIVELES_VO2` para que sean configurables en un único punto.
 
-### 7. "Mi panel" del rol usuario diferenciado
+## UI
 
-Rediseñar el Dashboard para `primaryRole === "usuario"` con datos relevantes:
+Ruta nueva `/app/cooper` con dos vistas según rol:
 
-- **Tarjetas de KPIs personales**: Sesiones de diario en los últimos 30 días, Simulacros realizados, Mejor marca reciente, Rutinas activas.
-- **Gráfica 1 (línea)**: Evolución de RPE / sueño / estrés del diario en últimas 4 semanas (usar `MetricsChart` ya existente).
-- **Gráfica 2 (línea)**: Progresión de la marca clave seleccionable (combo con sus marcas registradas).
-- **Lista**: Próximos simulacros / última entrada de diario / rutina activa actual (ya existente, mejorarla).
-- Mantener panel actual para entrenador/superadmin.
+### Entrenador / Superadmin — `Cooper.tsx`
+- **Listado de tests**: tabla con nombre, fecha, temperatura, nº participantes, acciones (editar / eliminar con `AlertDialog` de confirmación / abrir).
+- **Crear/editar test** (Dialog): nombre, fecha, temperatura, condiciones, notas.
+- **Detalle del test** (Dialog o vista expandida):
+  - Tabla de participantes con columnas calculadas en vivo (edad, VAM, VO2max, nivel, ritmos, recuperación).
+  - Botón "Añadir resultado" → selector de usuario (de `profiles` filtrado por `coach_assignments` para entrenador, todos para superadmin) + formulario con los campos manuales. Los valores derivados se previsualizan en el formulario mientras se escribe.
+  - Editar/eliminar resultado (con confirmación).
+  - **Resumen del test**: cards con media de distancia, VAM, VO2max; máx/mín distancia.
 
-### 8. Rutinas: usuario solo ve sus rutinas asignadas
+### Usuario normal — misma ruta, vista distinta
+- **Mis tests de Cooper**: lista cronológica de sus propios `cooper_results`, cada fila muestra fecha del test, distancia, VAM, VO2max, nivel, ritmos, recuperación.
+- **Bloque "Mi evolución"**:
+  - KPIs: mejor distancia, mejor VAM, primer vs último test (delta).
+  - Gráfica de evolución (reutilizando `MetricsChart`) con distancia y VO2max en el tiempo.
+- No ve ningún dato de otros usuarios. Sin selector de usuario. Sin botones de creación.
 
-- Ya existe la lógica `visibleRoutines` que filtra por `assignmentsForUser` para usuarios. Verificar y reforzar:
-  - Al pulsar en una rutina como usuario, abrir vista de solo lectura `viewing` (ya existe).
-  - Confirmar que `loadAll` no expone otras rutinas en la UI cuando `primaryRole === "usuario"`.
-  - Ajustar `loadAll` para no cargar `routines` global cuando el rol es usuario (solo a través de `assignmentsForUser`), reduciendo fugas.
+### Sidebar
+Añadir entrada "Test de Cooper" con icono `Timer` o `Activity`:
+- En `userItems` como "Mis tests de Cooper".
+- En `coachItems` y `adminItems` como "Test de Cooper".
 
-### 9. Superadmin puede eliminar histórico de simulacros (con confirmación)
+### Routing
+Registrar `/app/cooper` en `App.tsx` apuntando a `Cooper.tsx`. La página decide la vista según `primaryRole`.
 
-- En `Simulacros.tsx`, en la lista de ejecuciones (`executions`), añadir botón papelera visible solo si `isSuperadmin` (o el propio usuario).
-- Wrap en `AlertDialog` con confirmación.
-- Al confirmar: borrar `simulacro_results` con `execution_id` y luego `simulacro_executions`.
-- Añadir además botón "Eliminar todo el histórico" (solo superadmin) con doble confirmación, opcionalmente filtrado por usuario.
+## Validaciones
+- `distancia_m` requerido y > 0.
+- `fecha_nacimiento` requerida (necesaria para la edad y por tanto el nivel).
+- `sexo` requerido (necesario para VO2max y nivel).
+- `fc_final`, `fc_60s` opcionales pero positivos si se introducen.
+- `tiempo_bajo_100_seg` opcional; si está vacío no se muestra recuperación.
 
-### 10. Superadmin puede asignar nueva contraseña en "Editar perfil"
+## Detalles técnicos
 
-- En `Usuarios.tsx`, dentro del diálogo de edición de perfil, añadir sección "Resetear contraseña" (solo visible si `isSuper`):
-  - Input nueva contraseña + botón "Actualizar contraseña".
-  - Llamar a una nueva edge function `admin-reset-password` que use `service_role` y `admin.updateUserById(target_user_id, { password })`.
-  - La edge function valida que el caller es superadmin antes de ejecutar.
+- Migración SQL nueva con las dos tablas + RLS.
+- Nuevo helper `src/lib/cooper.ts` con todas las fórmulas y constantes de umbrales (testeable, sin dependencias React).
+- Nueva página `src/pages/Cooper.tsx` que ramifica por rol.
+- Actualización de `src/App.tsx` (ruta) y `src/components/AppSidebar.tsx` (entrada de menú en los tres role-sets).
+- No se tocan tablas existentes ni RLS existentes.
+- No se requieren edge functions (todo client-side + RLS).
+- Reutilización de componentes UI existentes (`Card`, `Dialog`, `AlertDialog`, `Table`, `Select`, `MetricsChart`).
 
----
+## Archivos afectados
 
-## Cambios técnicos
-
-**Migraciones SQL:**
-1. `ALTER TABLE forum_messages ADD COLUMN parent_id uuid;`
-2. `ALTER TABLE profiles ADD COLUMN acepta_mensajes_usuarios boolean NOT NULL DEFAULT true;`
-3. `ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications;` + `ALTER TABLE notifications REPLICA IDENTITY FULL;`
-
-**Nueva edge function:** `supabase/functions/admin-reset-password/index.ts` (verifica superadmin, recibe `user_id` + `password`).
-
-**Archivos a editar:**
-- `src/pages/Foro.tsx` (respuestas anidadas + notificaciones)
-- `src/hooks/useNotifications.ts` (refresh local en mark read)
-- `src/pages/Chat.tsx` (selector amplio + validación)
-- `src/pages/Perfil.tsx` (toggle recibir mensajes)
-- `src/pages/Admin.tsx` (rol único)
-- `src/pages/Usuarios.tsx` (eliminar asignación coach + reset password)
-- `src/pages/Dashboard.tsx` (panel usuario rediseñado)
-- `src/pages/Rutinas.tsx` (verificar filtro)
-- `src/pages/Simulacros.tsx` (eliminar ejecuciones)
-
----
-
-## Preguntas (no bloqueantes)
-
-- Para "eliminar histórico de simulacros": ¿quieres botón individual por ejecución, o un botón global "Limpiar histórico de un deportista"? Por defecto haré ambos.
-- Para el panel de usuario: ¿quieres una marca destacada concreta o que el usuario elija qué métrica ver? Por defecto haré un selector.
+- **Crear**: `supabase/migrations/<timestamp>_cooper.sql`, `src/lib/cooper.ts`, `src/pages/Cooper.tsx`.
+- **Editar**: `src/App.tsx`, `src/components/AppSidebar.tsx`.
