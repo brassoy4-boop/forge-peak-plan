@@ -16,6 +16,9 @@ interface Body {
   sexo?: "masculino" | "femenino" | "unisex" | null;
   role?: "usuario" | "entrenador";
   assign_to_caller?: boolean;
+  fecha_nacimiento?: string | null;
+  peso?: number | null;
+  altura?: number | null;
 }
 
 Deno.serve(async (req) => {
@@ -113,12 +116,14 @@ Deno.serve(async (req) => {
     }
     const newUserId = created.user.id;
 
-    // Esperar a que el trigger handle_new_user cree perfil/rol y actualizar perfil con sexo
-    if (body.sexo) {
-      await admin.from("profiles").update({ sexo: body.sexo }).eq(
-        "user_id",
-        newUserId,
-      );
+    // Esperar a que el trigger handle_new_user cree perfil/rol y actualizar perfil con datos extra
+    const profileUpdate: Record<string, unknown> = {};
+    if (body.sexo) profileUpdate.sexo = body.sexo;
+    if (body.fecha_nacimiento) profileUpdate.fecha_nacimiento = body.fecha_nacimiento;
+    if (body.peso != null) profileUpdate.peso = body.peso;
+    if (body.altura != null) profileUpdate.altura = body.altura;
+    if (Object.keys(profileUpdate).length > 0) {
+      await admin.from("profiles").update(profileUpdate).eq("user_id", newUserId);
     }
 
     // Si rol entrenador, añadirlo (manteniendo el rol 'usuario' por defecto si quieres limpiarlo, lo dejamos)

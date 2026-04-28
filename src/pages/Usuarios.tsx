@@ -27,7 +27,7 @@ export default function Usuarios() {
   const [userRoles, setUserRoles] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" as "masculino" | "femenino" });
+  const [form, setForm] = useState({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" as "masculino" | "femenino", fecha_nacimiento: "", peso: "", altura: "" });
   const [search, setSearch] = useState("");
   const [routineDialog, setRoutineDialog] = useState<{ open: boolean; userId: string }>({ open: false, userId: "" });
   const [routineForm, setRoutineForm] = useState({ routine_id: "", fecha_inicio: "", fecha_fin: "" });
@@ -65,6 +65,9 @@ export default function Usuarios() {
       body: {
         email: form.email, password: form.password, nombre: form.nombre, apellidos: form.apellidos,
         sexo: form.sexo, role: "usuario", assign_to_caller: true,
+        fecha_nacimiento: form.fecha_nacimiento || null,
+        peso: form.peso ? Number(form.peso) : null,
+        altura: form.altura ? Number(form.altura) : null,
       },
     });
     setCreating(false);
@@ -73,7 +76,7 @@ export default function Usuarios() {
     }
     toast.success("Deportista creado y asignado");
     setOpen(false);
-    setForm({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" });
+    setForm({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino", fecha_nacimiento: "", peso: "", altura: "" });
     load();
   };
 
@@ -194,6 +197,11 @@ export default function Usuarios() {
                         <SelectItem value="masculino">Masculino</SelectItem><SelectItem value="femenino">Femenino</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-2"><Label>Fecha de nacimiento</Label><Input type="date" value={form.fecha_nacimiento} onChange={(e) => setForm({ ...form, fecha_nacimiento: e.target.value })} /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2"><Label>Peso (kg)</Label><Input type="number" step="0.1" value={form.peso} onChange={(e) => setForm({ ...form, peso: e.target.value })} /></div>
+                    <div className="space-y-2"><Label>Altura (cm)</Label><Input type="number" step="0.1" value={form.altura} onChange={(e) => setForm({ ...form, altura: e.target.value })} /></div>
                   </div>
                   <p className="text-xs text-muted-foreground">El usuario podrá iniciar sesión con email + contraseña + PIN del centro.</p>
                 </div>
