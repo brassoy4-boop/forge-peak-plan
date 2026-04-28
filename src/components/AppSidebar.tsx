@@ -9,6 +9,7 @@ import {
   Activity, ListChecks, FolderTree, Gauge, Timer,
 } from "lucide-react";
 import { useAuth, AppRole } from "@/lib/auth";
+import { useFeatureFlags } from "@/lib/featureFlags";
 import { Brand } from "@/components/Brand";
 import { Button } from "@/components/ui/button";
 
@@ -54,13 +55,20 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { primaryRole, signOut, user } = useAuth();
+  const { flags } = useFeatureFlags();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const items: Item[] =
+  const baseItems: Item[] =
     primaryRole === "superadmin" ? adminItems :
     primaryRole === "entrenador" ? coachItems :
     userItems;
+
+  const items = baseItems.filter((it) => {
+    if (it.url === "/app/foro" && !flags.foro) return false;
+    if (it.url === "/app/chat" && !flags.chat) return false;
+    return true;
+  });
 
   const isActive = (url: string) => {
     if (url === "/app") return location.pathname === "/app";
