@@ -1,0 +1,1 @@
+ALTER TABLE public.cooper_results ADD COLUMN IF NOT EXISTS fc_meta integer;
