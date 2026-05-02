@@ -161,7 +161,7 @@ export default function Simulacros() {
     if (expanded === execId) { setExpanded(null); return; }
     setExpanded(execId);
     if (!executionResults[execId]) {
-      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", execId);
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", execId);
       setExecutionResults((p) => ({ ...p, [execId]: data ?? [] }));
     }
   };
@@ -169,7 +169,7 @@ export default function Simulacros() {
   const startEditExec = async (exec: any) => {
     let det = executionResults[exec.id];
     if (!det) {
-      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", exec.id);
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", exec.id);
       det = data ?? [];
       setExecutionResults((p) => ({ ...p, [exec.id]: det! }));
     }
@@ -201,7 +201,7 @@ export default function Simulacros() {
     await supabase.from("simulacro_executions").update({ observaciones: editObs }).eq("id", editingExec.id);
     toast.success("Simulacro actualizado");
     // Refresh results for this exec
-    const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", editingExec.id);
+    const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", editingExec.id);
     setExecutionResults((p) => ({ ...p, [editingExec.id]: data ?? [] }));
     setEditingExec(null);
     load();
