@@ -38,15 +38,6 @@ export default function Ejercicios() {
   useEffect(() => { load(); }, []);
 
   const usageCount = (catId: string) => items.filter((e) => e.category_id === catId).length;
-      <CategoryManagerDialog
-        open={openCatManager}
-        onOpenChange={setOpenCatManager}
-        tableName="exercise_categories"
-        title="Gestionar categorías de ejercicios"
-        categories={cats}
-        usageCount={usageCount}
-        onChanged={load}
-      />
 
 
   const openExerciseDialog = (ex?: any) => {
