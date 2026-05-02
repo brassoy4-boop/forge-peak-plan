@@ -183,26 +183,29 @@ export default function Simulacros() {
   const saveEditExec = async () => {
     if (!editingExec) return;
     const det = executionResults[editingExec.id] ?? [];
-    // Update each result
+    const parsed: { id: string; mark_id: string; valor_numerico: number | null; valor_texto: string | null }[] = [];
     for (const r of det) {
-      const v = editValues[r.mark_id] ?? "";
-      const num = Number(v);
-      const isNum = v !== "" && !isNaN(num);
+      const v = (editValues[r.mark_id] ?? "").toString();
+      const tipo = r.marks?.value_type ?? "texto";
+      const fmt = r.marks?.tiempo_formato as TiempoFormato | null;
+      const p = parseMarkValue(v, tipo, fmt);
+      if (!p.ok) return toast.error(`"${r.marks?.nombre}": ${p.error}`);
+      parsed.push({ id: r.id, mark_id: r.mark_id, valor_numerico: p.valor_numerico, valor_texto: p.valor_texto });
+    }
+    for (const p of parsed) {
       await supabase.from("simulacro_results").update({
-        valor_numerico: isNum ? num : null,
-        valor_texto: isNum ? null : (v || null),
-      }).eq("id", r.id);
-      // Reflect in mark_records
+        valor_numerico: p.valor_numerico,
+        valor_texto: p.valor_texto,
+      }).eq("id", p.id);
       await supabase.from("mark_records").update({
-        valor_numerico: isNum ? num : null,
-        valor_texto: isNum ? null : (v || null),
-      }).eq("origen_ref", editingExec.id).eq("mark_id", r.mark_id);
+        valor_numerico: p.valor_numerico,
+        valor_texto: p.valor_texto,
+      }).eq("origen_ref", editingExec.id).eq("mark_id", p.mark_id);
     }
     await supabase.from("simulacro_executions").update({ observaciones: editObs }).eq("id", editingExec.id);
     toast.success("Simulacro actualizado");
-    // Refresh results for this exec
     const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", editingExec.id);
-    setExecutionResults((p) => ({ ...p, [editingExec.id]: data ?? [] }));
+    setExecutionResults((prev) => ({ ...prev, [editingExec.id]: data ?? [] }));
     setEditingExec(null);
     load();
   };
