@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Target, ChevronDown, ChevronUp, Archive, ArchiveRestore, X, Trash2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { canExecuteSimulacro, isValidTime, isValidNumber, type Sexo } from "@/lib/validators";
+import { canExecuteSimulacro, parseMarkValue, tiempoPlaceholder, type Sexo, type TiempoFormato } from "@/lib/validators";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { SortableItem } from "@/components/SortableItem";
@@ -54,7 +54,7 @@ export default function Simulacros() {
 
   const load = async () => {
     const [t, o, m, e] = await Promise.all([
-      supabase.from("simulacro_templates").select("*, oposiciones(nombre), simulacro_template_marks(mark_id, marks(nombre, unidad, value_type))"),
+      supabase.from("simulacro_templates").select("*, oposiciones(nombre), simulacro_template_marks(mark_id, marks(nombre, unidad, value_type, tiempo_formato))"),
       supabase.from("oposiciones").select("*"),
       supabase.from("marks").select("*").eq("status", "activo").order("nombre"),
       user ? supabase.from("simulacro_executions").select("*, simulacro_templates(nombre, oposiciones(nombre))").order("fecha", { ascending: false }).limit(30) : Promise.resolve({ data: [] } as any),
@@ -120,25 +120,24 @@ export default function Simulacros() {
   const saveRun = async () => {
     if (!running || !targetUserId) return;
     if (!sexoCheck.ok) return toast.error(sexoCheck.reason ?? "No autorizado");
-    // Validar formato por tipo de marca
+    // Validar y parsear según tipo de marca
+    const parsedRows: { mark_id: string; valor_numerico: number | null; valor_texto: string | null }[] = [];
     for (const stm of running.simulacro_template_marks ?? []) {
-      const v = results[stm.mark_id];
-      if (!v) continue;
+      const v = (results[stm.mark_id] ?? "").toString();
+      if (!v.trim()) continue;
       const tipo = stm.marks?.value_type;
-      if (tipo === "tiempo" && !isValidTime(v)) {
-        return toast.error(`Tiempo inválido en "${stm.marks?.nombre}". Usa mm:ss o mm:ss.cc`);
+      const fmt = stm.marks?.tiempo_formato as TiempoFormato | null;
+      const r = parseMarkValue(v, tipo, fmt);
+      if (!r.ok) {
+        return toast.error(`"${stm.marks?.nombre}": ${r.error}`);
       }
-      if (["distancia","repeticiones","peso","puntuacion"].includes(tipo) && !isValidNumber(v)) {
-        return toast.error(`Valor numérico inválido en "${stm.marks?.nombre}"`);
-      }
+      parsedRows.push({ mark_id: stm.mark_id, valor_numerico: r.valor_numerico, valor_texto: r.valor_texto });
     }
     const { data: ex, error } = await supabase.from("simulacro_executions").insert({
       template_id: running.id, user_id: targetUserId, coach_id: isCoach ? user?.id : null, observaciones: obs,
     }).select().single();
     if (error) return toast.error(error.message);
-    const rows = Object.entries(results).filter(([_, v]) => v).map(([mark_id, valor]) => ({
-      execution_id: ex.id, mark_id, valor_numerico: Number(valor) || null, valor_texto: isNaN(Number(valor)) ? valor : null,
-    }));
+    const rows = parsedRows.map((r) => ({ execution_id: ex.id, ...r }));
     if (rows.length) {
       await supabase.from("simulacro_results").insert(rows);
       await supabase.from("mark_records").insert(rows.map(r => ({
@@ -162,7 +161,7 @@ export default function Simulacros() {
     if (expanded === execId) { setExpanded(null); return; }
     setExpanded(execId);
     if (!executionResults[execId]) {
-      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", execId);
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", execId);
       setExecutionResults((p) => ({ ...p, [execId]: data ?? [] }));
     }
   };
@@ -170,7 +169,7 @@ export default function Simulacros() {
   const startEditExec = async (exec: any) => {
     let det = executionResults[exec.id];
     if (!det) {
-      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", exec.id);
+      const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", exec.id);
       det = data ?? [];
       setExecutionResults((p) => ({ ...p, [exec.id]: det! }));
     }
@@ -184,26 +183,29 @@ export default function Simulacros() {
   const saveEditExec = async () => {
     if (!editingExec) return;
     const det = executionResults[editingExec.id] ?? [];
-    // Update each result
+    const parsed: { id: string; mark_id: string; valor_numerico: number | null; valor_texto: string | null }[] = [];
     for (const r of det) {
-      const v = editValues[r.mark_id] ?? "";
-      const num = Number(v);
-      const isNum = v !== "" && !isNaN(num);
+      const v = (editValues[r.mark_id] ?? "").toString();
+      const tipo = r.marks?.value_type ?? "texto";
+      const fmt = r.marks?.tiempo_formato as TiempoFormato | null;
+      const p = parseMarkValue(v, tipo, fmt);
+      if (!p.ok) return toast.error(`"${r.marks?.nombre}": ${p.error}`);
+      parsed.push({ id: r.id, mark_id: r.mark_id, valor_numerico: p.valor_numerico, valor_texto: p.valor_texto });
+    }
+    for (const p of parsed) {
       await supabase.from("simulacro_results").update({
-        valor_numerico: isNum ? num : null,
-        valor_texto: isNum ? null : (v || null),
-      }).eq("id", r.id);
-      // Reflect in mark_records
+        valor_numerico: p.valor_numerico,
+        valor_texto: p.valor_texto,
+      }).eq("id", p.id);
       await supabase.from("mark_records").update({
-        valor_numerico: isNum ? num : null,
-        valor_texto: isNum ? null : (v || null),
-      }).eq("origen_ref", editingExec.id).eq("mark_id", r.mark_id);
+        valor_numerico: p.valor_numerico,
+        valor_texto: p.valor_texto,
+      }).eq("origen_ref", editingExec.id).eq("mark_id", p.mark_id);
     }
     await supabase.from("simulacro_executions").update({ observaciones: editObs }).eq("id", editingExec.id);
     toast.success("Simulacro actualizado");
-    // Refresh results for this exec
-    const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad)").eq("execution_id", editingExec.id);
-    setExecutionResults((p) => ({ ...p, [editingExec.id]: data ?? [] }));
+    const { data } = await supabase.from("simulacro_results").select("*, marks(nombre, unidad, value_type, tiempo_formato)").eq("execution_id", editingExec.id);
+    setExecutionResults((prev) => ({ ...prev, [editingExec.id]: data ?? [] }));
     setEditingExec(null);
     load();
   };
@@ -331,7 +333,7 @@ export default function Simulacros() {
               <div key={stm.mark_id} className="grid grid-cols-3 items-center gap-2">
                 <Label>{stm.marks?.nombre}</Label>
                 <Input
-                  placeholder={stm.marks?.value_type === "tiempo" ? "mm:ss.cc" : (stm.marks?.unidad ?? "")}
+                  placeholder={stm.marks?.value_type === "tiempo" ? tiempoPlaceholder(stm.marks?.tiempo_formato) : (stm.marks?.unidad ?? "")}
                   value={results[stm.mark_id] ?? ""}
                   onChange={(e) => setResults({ ...results, [stm.mark_id]: e.target.value })}
                 />

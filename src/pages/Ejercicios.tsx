@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Image as ImageIcon, Pencil, Archive, Power, PlayCircle } from "lucide-react";
+import { Plus, Image as ImageIcon, Pencil, Archive, Power, PlayCircle, FolderTree } from "lucide-react";
 import { toast } from "sonner";
 import { FileUploader } from "@/components/FileUploader";
+import { CategoryManagerDialog } from "@/components/CategoryManagerDialog";
 
 export default function Ejercicios() {
   const { primaryRole } = useAuth();
@@ -22,10 +23,9 @@ export default function Ejercicios() {
   const [filterCat, setFilterCat] = useState<string>("__all__");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const [openCat, setOpenCat] = useState(false);
+  const [openCatManager, setOpenCatManager] = useState(false);
   const [openEx, setOpenEx] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
-  const [catForm, setCatForm] = useState({ nombre: "" });
   const [exForm, setExForm] = useState({ nombre: "", category_id: "", descripcion: "", imagen_url: "", video_url: "", instrucciones: "" });
 
   const load = async () => {
@@ -37,11 +37,8 @@ export default function Ejercicios() {
   };
   useEffect(() => { load(); }, []);
 
-  const saveCat = async () => {
-    const { error } = await supabase.from("exercise_categories").insert({ nombre: catForm.nombre });
-    if (error) return toast.error(error.message);
-    toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
-  };
+  const usageCount = (catId: string) => items.filter((e) => e.category_id === catId).length;
+
 
   const openExerciseDialog = (ex?: any) => {
     if (ex) {
@@ -96,14 +93,9 @@ export default function Ejercicios() {
       <PageHeader title="Ejercicios" description="Catálogo de ejercicios e imágenes."
         actions={isCoach && (
           <div className="flex gap-2">
-            <Dialog open={openCat} onOpenChange={setOpenCat}>
-              <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" /> Categoría</Button></DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Nueva categoría</DialogTitle></DialogHeader>
-                <div className="space-y-2"><Label>Nombre</Label><Input value={catForm.nombre} onChange={(e) => setCatForm({ nombre: e.target.value })} /></div>
-                <DialogFooter><Button onClick={saveCat}>Guardar</Button></DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => setOpenCatManager(true)}>
+              <FolderTree className="mr-2 h-4 w-4" /> Categorías
+            </Button>
             <Dialog open={openEx} onOpenChange={setOpenEx}>
               <DialogTrigger asChild><Button onClick={() => openExerciseDialog()}><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -149,6 +141,16 @@ export default function Ejercicios() {
           Mostrar archivados
         </label>
       </div>
+
+      <CategoryManagerDialog
+        open={openCatManager}
+        onOpenChange={setOpenCatManager}
+        tableName="exercise_categories"
+        title="Gestionar categorías de ejercicios"
+        categories={cats}
+        usageCount={usageCount}
+        onChanged={load}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visible.map((ex) => (

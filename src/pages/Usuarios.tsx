@@ -11,9 +11,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Loader2, Search, Pencil, KeyRound } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Plus, Loader2, Search, Pencil, KeyRound, X } from "lucide-react";
 import { toast } from "sonner";
+import { FileUploader } from "@/components/FileUploader";
+
+const initialsOf = (n?: string, a?: string) => `${(n ?? "").charAt(0)}${(a ?? "").charAt(0)}`.toUpperCase() || "?";
 
 export default function Usuarios() {
   const { user, primaryRole } = useAuth();
@@ -27,14 +31,23 @@ export default function Usuarios() {
   const [userRoles, setUserRoles] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino" as "masculino" | "femenino", fecha_nacimiento: "", peso: "", altura: "" });
+  const [form, setForm] = useState({
+    email: "", password: "", nombre: "", apellidos: "",
+    sexo: "masculino" as "masculino" | "femenino", fecha_nacimiento: "",
+    peso: "", altura: "", avatar_url: "",
+  });
   const [search, setSearch] = useState("");
-  const [routineDialog, setRoutineDialog] = useState<{ open: boolean; userId: string }>({ open: false, userId: "" });
-  const [routineForm, setRoutineForm] = useState({ routine_id: "", fecha_inicio: "", fecha_fin: "" });
 
-  // Editar perfil
+  // Editar perfil (incluye rol, oposiciones y rutinas)
   const [editing, setEditing] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({ nombre: "", apellidos: "", email: "", telefono: "", sexo: "masculino" as "masculino" | "femenino" | "unisex", peso: "", altura: "", fecha_nacimiento: "" });
+  const [editForm, setEditForm] = useState({
+    nombre: "", apellidos: "", email: "", telefono: "",
+    sexo: "masculino" as "masculino" | "femenino" | "unisex",
+    peso: "", altura: "", fecha_nacimiento: "", avatar_url: "",
+  });
+  const [editRole, setEditRole] = useState<"usuario" | "entrenador" | "superadmin">("usuario");
+  const [routineForm, setRoutineForm] = useState({ routine_id: "", fecha_inicio: "", fecha_fin: "" });
+  const [linkOpoSel, setLinkOpoSel] = useState<string>("");
   const [newPassword, setNewPassword] = useState("");
   const [resettingPwd, setResettingPwd] = useState(false);
 
@@ -68,6 +81,7 @@ export default function Usuarios() {
         fecha_nacimiento: form.fecha_nacimiento || null,
         peso: form.peso ? Number(form.peso) : null,
         altura: form.altura ? Number(form.altura) : null,
+        avatar_url: form.avatar_url || null,
       },
     });
     setCreating(false);
@@ -76,18 +90,28 @@ export default function Usuarios() {
     }
     toast.success("Deportista creado y asignado");
     setOpen(false);
-    setForm({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino", fecha_nacimiento: "", peso: "", altura: "" });
+    setForm({ email: "", password: "", nombre: "", apellidos: "", sexo: "masculino", fecha_nacimiento: "", peso: "", altura: "", avatar_url: "" });
     load();
+  };
+
+  const rolesOf = (userId: string) => userRoles.filter(r => r.user_id === userId).map(r => r.role);
+  const mainRoleOf = (userId: string) => {
+    const roles = rolesOf(userId);
+    return roles.includes("superadmin") ? "superadmin" : roles.includes("entrenador") ? "entrenador" : "usuario";
   };
 
   const openEdit = (p: any) => {
     setEditing(p);
     setNewPassword("");
+    setLinkOpoSel("");
+    setRoutineForm({ routine_id: "", fecha_inicio: "", fecha_fin: "" });
+    setEditRole(mainRoleOf(p.user_id) as any);
     setEditForm({
       nombre: p.nombre ?? "", apellidos: p.apellidos ?? "", email: p.email ?? "",
       telefono: p.telefono ?? "", sexo: (p.sexo ?? "masculino") as any,
       peso: p.peso?.toString() ?? "", altura: p.altura?.toString() ?? "",
       fecha_nacimiento: p.fecha_nacimiento ?? "",
+      avatar_url: p.avatar_url ?? "",
     });
   };
 
@@ -112,27 +136,29 @@ export default function Usuarios() {
       peso: editForm.peso ? Number(editForm.peso) : null,
       altura: editForm.altura ? Number(editForm.altura) : null,
       fecha_nacimiento: editForm.fecha_nacimiento || null,
+      avatar_url: editForm.avatar_url || null,
     }).eq("id", editing.id);
     if (error) return toast.error(error.message);
+    // Si superadmin y cambió rol, aplicar
+    if (isSuper) {
+      const current = mainRoleOf(editing.user_id);
+      if (current !== editRole) {
+        await supabase.from("user_roles").delete().eq("user_id", editing.user_id);
+        await supabase.from("user_roles").insert({ user_id: editing.user_id, role: editRole });
+      }
+    }
     toast.success("Perfil actualizado");
     setEditing(null);
     load();
   };
 
-  const setRole = async (userId: string, role: "usuario" | "entrenador" | "superadmin") => {
-    if (!isSuper) return toast.error("Solo el superadmin puede cambiar roles");
-    // Eliminar roles previos y poner solo el nuevo
-    await supabase.from("user_roles").delete().eq("user_id", userId);
-    const { error } = await supabase.from("user_roles").insert({ user_id: userId, role });
+  const linkOpoInModal = async () => {
+    if (!editing || !linkOpoSel) return;
+    const { error } = await supabase.from("user_oposiciones").insert({ user_id: editing.user_id, oposicion_id: linkOpoSel });
     if (error) return toast.error(error.message);
-    toast.success(`Rol ${role} asignado`);
+    toast.success("Oposición vinculada");
+    setLinkOpoSel("");
     load();
-  };
-
-  const linkOpo = async (userId: string, opoId: string) => {
-    const { error } = await supabase.from("user_oposiciones").insert({ user_id: userId, oposicion_id: opoId });
-    if (error) return toast.error(error.message);
-    toast.success("Oposición vinculada"); load();
   };
 
   const confirmUnlinkOpo = async () => {
@@ -144,10 +170,10 @@ export default function Usuarios() {
     load();
   };
 
-  const assignRoutine = async () => {
-    if (!user || !routineForm.routine_id || !routineDialog.userId) return;
+  const assignRoutineInModal = async () => {
+    if (!user || !editing || !routineForm.routine_id) return;
     const { error } = await supabase.from("routine_assignments").insert({
-      user_id: routineDialog.userId,
+      user_id: editing.user_id,
       routine_id: routineForm.routine_id,
       assigned_by: user.id,
       fecha_inicio: routineForm.fecha_inicio || null,
@@ -156,7 +182,6 @@ export default function Usuarios() {
     });
     if (error) return toast.error(error.message);
     toast.success("Rutina asignada");
-    setRoutineDialog({ open: false, userId: "" });
     setRoutineForm({ routine_id: "", fecha_inicio: "", fecha_fin: "" });
     load();
   };
@@ -166,13 +191,19 @@ export default function Usuarios() {
     load();
   };
 
-  const rolesOf = (userId: string) => userRoles.filter(r => r.user_id === userId).map(r => r.role);
+  const removeRoutineAssignment = async (id: string) => {
+    await supabase.from("routine_assignments").delete().eq("id", id);
+    load();
+  };
 
   const filtered = profiles.filter((p) => {
     if (!search.trim()) return true;
     const q = search.toLowerCase();
     return `${p.nombre} ${p.apellidos} ${p.email ?? ""}`.toLowerCase().includes(q);
   });
+
+  const editingOpos = editing ? userOpos.filter(uo => uo.user_id === editing.user_id) : [];
+  const editingRoutines = editing ? routineAssignments.filter(ra => ra.user_id === editing.user_id) : [];
 
   return (
     <TooltipProvider>
@@ -181,9 +212,21 @@ export default function Usuarios() {
           actions={
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" /> Nuevo</Button></DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle>Nuevo deportista</DialogTitle></DialogHeader>
                 <div className="space-y-3">
+                  <div className="flex flex-col items-center gap-2">
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={form.avatar_url} />
+                      <AvatarFallback>{initialsOf(form.nombre, form.apellidos)}</AvatarFallback>
+                    </Avatar>
+                    <FileUploader
+                      folder="avatars/new"
+                      value={form.avatar_url}
+                      onChange={(url) => setForm({ ...form, avatar_url: url ?? "" })}
+                      preview={false}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-2"><Label>Nombre</Label><Input value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} /></div>
                     <div className="space-y-2"><Label>Apellidos</Label><Input value={form.apellidos} onChange={(e) => setForm({ ...form, apellidos: e.target.value })} /></div>
@@ -226,10 +269,9 @@ export default function Usuarios() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre</TableHead>
+                  <TableHead>Deportista</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Rol</TableHead>
-                  <TableHead>Sexo</TableHead>
                   <TableHead>Oposiciones</TableHead>
                   <TableHead>Rutinas activas</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
@@ -238,40 +280,30 @@ export default function Usuarios() {
               <TableBody>
                 {filtered.map((p) => {
                   const opos = userOpos.filter(uo => uo.user_id === p.user_id);
-                  const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id);
-                  
-                  const roles = rolesOf(p.user_id);
-                  const mainRole = roles.includes("superadmin") ? "superadmin" : roles.includes("entrenador") ? "entrenador" : "usuario";
+                  const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id && ra.activa);
+                  const mainRole = mainRoleOf(p.user_id);
                   return (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.nombre} {p.apellidos}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-9 w-9">
+                            <AvatarImage src={p.avatar_url ?? undefined} />
+                            <AvatarFallback>{initialsOf(p.nombre, p.apellidos)}</AvatarFallback>
+                          </Avatar>
+                          <span>{p.nombre} {p.apellidos}</span>
+                        </div>
+                      </TableCell>
                       <TableCell className="text-sm">{p.email}</TableCell>
                       <TableCell>
-                        {isSuper ? (
-                          <Select value={mainRole} onValueChange={(v) => setRole(p.user_id, v as any)}>
-                            <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="usuario">Usuario</SelectItem>
-                              <SelectItem value="entrenador">Entrenador</SelectItem>
-                              <SelectItem value="superadmin">Superadmin</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <Badge variant={mainRole === "superadmin" ? "destructive" : mainRole === "entrenador" ? "default" : "secondary"}>
-                            {mainRole}
-                          </Badge>
-                        )}
+                        <Badge variant={mainRole === "superadmin" ? "destructive" : mainRole === "entrenador" ? "default" : "secondary"}>
+                          {mainRole}
+                        </Badge>
                       </TableCell>
-                      <TableCell><Badge variant="outline">{p.sexo ?? "—"}</Badge></TableCell>
                       <TableCell className="text-xs">
                         <div className="flex flex-wrap gap-1">
                           {opos.map((uo) => {
                             const o = oposiciones.find(x => x.id === uo.oposicion_id);
-                            return o ? (
-                              <Badge key={uo.id} variant="secondary" className="cursor-pointer" onClick={() => setUnlinkConfirm({ id: uo.id, nombre: o.nombre })} title="Click para quitar">
-                                {o.nombre} ×
-                              </Badge>
-                            ) : null;
+                            return o ? <Badge key={uo.id} variant="secondary">{o.nombre}</Badge> : null;
                           })}
                           {opos.length === 0 && "—"}
                         </div>
@@ -280,58 +312,47 @@ export default function Usuarios() {
                         <div className="flex flex-wrap gap-1">
                           {userRoutinesList.map((ra) => {
                             const r = routines.find(x => x.id === ra.routine_id);
-                            return r ? (
-                              <Badge key={ra.id} variant={ra.activa ? "default" : "outline"} className="cursor-pointer" onClick={() => toggleRoutineActive(ra.id, ra.activa)} title="Click para activar/desactivar">
-                                {r.nombre}
-                              </Badge>
-                            ) : null;
+                            return r ? <Badge key={ra.id} variant="default">{r.nombre}</Badge> : null;
                           })}
                           {userRoutinesList.length === 0 && "—"}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right space-x-1 whitespace-nowrap">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(p)} title="Editar perfil"><Pencil className="h-3 w-3" /></Button>
-                        <Select onValueChange={(v) => linkOpo(p.user_id, v)}>
-                          <SelectTrigger className="w-32 inline-flex"><SelectValue placeholder="+ Oposición" /></SelectTrigger>
-                          <SelectContent>{oposiciones.map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}</SelectContent>
-                        </Select>
-                        <Button variant="outline" size="sm" onClick={() => setRoutineDialog({ open: true, userId: p.user_id })}>+ Rutina</Button>
+                      <TableCell className="text-right whitespace-nowrap">
+                        <Button variant="outline" size="sm" onClick={() => openEdit(p)} title="Editar perfil">
+                          <Pencil className="h-3 w-3 mr-1" /> Editar
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );
                 })}
                 {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Sin resultados.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Sin resultados.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
           </CardContent>
         </Card>
 
-        <Dialog open={routineDialog.open} onOpenChange={(o) => setRoutineDialog({ open: o, userId: routineDialog.userId })}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Asignar rutina</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-2"><Label>Rutina</Label>
-                <Select value={routineForm.routine_id} onValueChange={(v) => setRoutineForm({ ...routineForm, routine_id: v })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                  <SelectContent>{routines.map(r => <SelectItem key={r.id} value={r.id}>{r.nombre} ({r.num_dias}d)</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Inicio</Label><Input type="date" value={routineForm.fecha_inicio} onChange={(e) => setRoutineForm({ ...routineForm, fecha_inicio: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Fin</Label><Input type="date" value={routineForm.fecha_fin} onChange={(e) => setRoutineForm({ ...routineForm, fecha_fin: e.target.value })} /></div>
-              </div>
-            </div>
-            <DialogFooter><Button onClick={assignRoutine} disabled={!routineForm.routine_id}>Asignar</Button></DialogFooter>
-          </DialogContent>
-        </Dialog>
-
         {/* Editar perfil */}
         <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
-          <DialogContent className="max-w-lg">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Editar perfil</DialogTitle></DialogHeader>
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* Avatar */}
+              <div className="flex flex-col items-center gap-2">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage src={editForm.avatar_url} />
+                  <AvatarFallback>{initialsOf(editForm.nombre, editForm.apellidos)}</AvatarFallback>
+                </Avatar>
+                <FileUploader
+                  folder={`avatars/${editing?.user_id ?? "edit"}`}
+                  value={editForm.avatar_url}
+                  onChange={(url) => setEditForm({ ...editForm, avatar_url: url ?? "" })}
+                  preview={false}
+                />
+              </div>
+
+              {/* Datos */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2"><Label>Nombre</Label><Input value={editForm.nombre} onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })} /></div>
                 <div className="space-y-2"><Label>Apellidos</Label><Input value={editForm.apellidos} onChange={(e) => setEditForm({ ...editForm, apellidos: e.target.value })} /></div>
@@ -356,6 +377,90 @@ export default function Usuarios() {
                 <div className="space-y-2"><Label>Nacimiento</Label><Input type="date" value={editForm.fecha_nacimiento} onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })} /></div>
               </div>
 
+              {/* Rol */}
+              {isSuper && (
+                <div className="border-t pt-3 space-y-2">
+                  <Label>Rol</Label>
+                  <Select value={editRole} onValueChange={(v) => setEditRole(v as any)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="usuario">Usuario</SelectItem>
+                      <SelectItem value="entrenador">Entrenador</SelectItem>
+                      <SelectItem value="superadmin">Superadmin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Oposiciones */}
+              <div className="border-t pt-3 space-y-2">
+                <Label>Oposiciones</Label>
+                <div className="flex flex-wrap gap-1 min-h-[2rem]">
+                  {editingOpos.map((uo) => {
+                    const o = oposiciones.find(x => x.id === uo.oposicion_id);
+                    return o ? (
+                      <Badge key={uo.id} variant="secondary" className="gap-1">
+                        {o.nombre}
+                        <button
+                          type="button"
+                          className="hover:text-destructive"
+                          onClick={() => setUnlinkConfirm({ id: uo.id, nombre: o.nombre })}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ) : null;
+                  })}
+                  {editingOpos.length === 0 && <span className="text-xs text-muted-foreground">Sin oposiciones</span>}
+                </div>
+                <div className="flex gap-2">
+                  <Select value={linkOpoSel} onValueChange={setLinkOpoSel}>
+                    <SelectTrigger><SelectValue placeholder="Añadir oposición..." /></SelectTrigger>
+                    <SelectContent>
+                      {oposiciones
+                        .filter(o => !editingOpos.some(uo => uo.oposicion_id === o.id))
+                        .map(o => <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" onClick={linkOpoInModal} disabled={!linkOpoSel}>Vincular</Button>
+                </div>
+              </div>
+
+              {/* Rutinas */}
+              <div className="border-t pt-3 space-y-2">
+                <Label>Rutinas asignadas</Label>
+                <div className="space-y-1">
+                  {editingRoutines.map((ra) => {
+                    const r = routines.find(x => x.id === ra.routine_id);
+                    if (!r) return null;
+                    return (
+                      <div key={ra.id} className="flex items-center gap-2 text-sm border rounded-md px-2 py-1">
+                        <span className="flex-1">{r.nombre} <span className="text-xs text-muted-foreground">({r.num_dias}d)</span></span>
+                        <Badge variant={ra.activa ? "default" : "outline"} className="cursor-pointer" onClick={() => toggleRoutineActive(ra.id, ra.activa)}>
+                          {ra.activa ? "Activa" : "Inactiva"}
+                        </Badge>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => removeRoutineAssignment(ra.id)}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  {editingRoutines.length === 0 && <span className="text-xs text-muted-foreground">Sin rutinas</span>}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <Select value={routineForm.routine_id} onValueChange={(v) => setRoutineForm({ ...routineForm, routine_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Rutina..." /></SelectTrigger>
+                    <SelectContent>{routines.map(r => <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Input type="date" placeholder="Inicio" value={routineForm.fecha_inicio} onChange={(e) => setRoutineForm({ ...routineForm, fecha_inicio: e.target.value })} />
+                  <Input type="date" placeholder="Fin" value={routineForm.fecha_fin} onChange={(e) => setRoutineForm({ ...routineForm, fecha_fin: e.target.value })} />
+                </div>
+                <Button variant="outline" size="sm" onClick={assignRoutineInModal} disabled={!routineForm.routine_id}>
+                  Asignar rutina
+                </Button>
+              </div>
+
+              {/* Reset password */}
               {isSuper && (
                 <div className="border-t pt-3 space-y-2">
                   <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4" /> Resetear contraseña</Label>
@@ -366,7 +471,6 @@ export default function Usuarios() {
                       Asignar
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">El usuario podrá iniciar sesión con esta nueva contraseña.</p>
                 </div>
               )}
             </div>

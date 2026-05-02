@@ -590,6 +590,7 @@ export type Database = {
           orden: number
           participa_ranking: boolean
           status: Database["public"]["Enums"]["entity_status"]
+          tiempo_formato: string | null
           unidad: string | null
           updated_at: string
           value_type: Database["public"]["Enums"]["mark_value_type"]
@@ -607,6 +608,7 @@ export type Database = {
           orden?: number
           participa_ranking?: boolean
           status?: Database["public"]["Enums"]["entity_status"]
+          tiempo_formato?: string | null
           unidad?: string | null
           updated_at?: string
           value_type: Database["public"]["Enums"]["mark_value_type"]
@@ -624,6 +626,7 @@ export type Database = {
           orden?: number
           participa_ranking?: boolean
           status?: Database["public"]["Enums"]["entity_status"]
+          tiempo_formato?: string | null
           unidad?: string | null
           updated_at?: string
           value_type?: Database["public"]["Enums"]["mark_value_type"]
