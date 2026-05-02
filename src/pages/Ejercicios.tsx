@@ -10,9 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Image as ImageIcon, Pencil, Archive, Power, PlayCircle } from "lucide-react";
+import { Plus, Image as ImageIcon, Pencil, Archive, Power, PlayCircle, FolderTree } from "lucide-react";
 import { toast } from "sonner";
 import { FileUploader } from "@/components/FileUploader";
+import { CategoryManagerDialog } from "@/components/CategoryManagerDialog";
 
 export default function Ejercicios() {
   const { primaryRole } = useAuth();
@@ -22,10 +23,9 @@ export default function Ejercicios() {
   const [filterCat, setFilterCat] = useState<string>("__all__");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
-  const [openCat, setOpenCat] = useState(false);
+  const [openCatManager, setOpenCatManager] = useState(false);
   const [openEx, setOpenEx] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
-  const [catForm, setCatForm] = useState({ nombre: "" });
   const [exForm, setExForm] = useState({ nombre: "", category_id: "", descripcion: "", imagen_url: "", video_url: "", instrucciones: "" });
 
   const load = async () => {
