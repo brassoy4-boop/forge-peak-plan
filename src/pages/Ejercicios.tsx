@@ -37,11 +37,8 @@ export default function Ejercicios() {
   };
   useEffect(() => { load(); }, []);
 
-  const saveCat = async () => {
-    const { error } = await supabase.from("exercise_categories").insert({ nombre: catForm.nombre });
-    if (error) return toast.error(error.message);
-    toast.success("Categoría creada"); setOpenCat(false); setCatForm({ nombre: "" }); load();
-  };
+  const usageCount = (catId: string) => items.filter((e) => e.category_id === catId).length;
+
 
   const openExerciseDialog = (ex?: any) => {
     if (ex) {
@@ -96,14 +93,9 @@ export default function Ejercicios() {
       <PageHeader title="Ejercicios" description="Catálogo de ejercicios e imágenes."
         actions={isCoach && (
           <div className="flex gap-2">
-            <Dialog open={openCat} onOpenChange={setOpenCat}>
-              <DialogTrigger asChild><Button variant="outline"><Plus className="mr-2 h-4 w-4" /> Categoría</Button></DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Nueva categoría</DialogTitle></DialogHeader>
-                <div className="space-y-2"><Label>Nombre</Label><Input value={catForm.nombre} onChange={(e) => setCatForm({ nombre: e.target.value })} /></div>
-                <DialogFooter><Button onClick={saveCat}>Guardar</Button></DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button variant="outline" onClick={() => setOpenCatManager(true)}>
+              <FolderTree className="mr-2 h-4 w-4" /> Categorías
+            </Button>
             <Dialog open={openEx} onOpenChange={setOpenEx}>
               <DialogTrigger asChild><Button onClick={() => openExerciseDialog()}><Plus className="mr-2 h-4 w-4" /> Ejercicio</Button></DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
