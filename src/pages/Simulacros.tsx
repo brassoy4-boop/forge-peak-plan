@@ -333,7 +333,7 @@ export default function Simulacros() {
               <div key={stm.mark_id} className="grid grid-cols-3 items-center gap-2">
                 <Label>{stm.marks?.nombre}</Label>
                 <Input
-                  placeholder={stm.marks?.value_type === "tiempo" ? "mm:ss.cc" : (stm.marks?.unidad ?? "")}
+                  placeholder={stm.marks?.value_type === "tiempo" ? tiempoPlaceholder(stm.marks?.tiempo_formato) : (stm.marks?.unidad ?? "")}
                   value={results[stm.mark_id] ?? ""}
                   onChange={(e) => setResults({ ...results, [stm.mark_id]: e.target.value })}
                 />
