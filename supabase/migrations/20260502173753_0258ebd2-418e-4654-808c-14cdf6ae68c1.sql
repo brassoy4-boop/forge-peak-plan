@@ -1,0 +1,1 @@
+ALTER TABLE public.marks ADD COLUMN IF NOT EXISTS tiempo_formato text;
