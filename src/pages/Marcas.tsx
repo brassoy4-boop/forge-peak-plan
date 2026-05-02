@@ -8,19 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Archive, Power, Trash2 } from "lucide-react";
+import { Plus, Pencil, Archive, Power, FolderTree } from "lucide-react";
 import { toast } from "sonner";
+import { CategoryManagerDialog } from "@/components/CategoryManagerDialog";
+import { TIEMPO_FORMATO_OPTIONS, TiempoFormato } from "@/lib/validators";
 
 interface MarkCategory { id: string; nombre: string; orden: number; status: string; }
 interface Mark {
   id: string; category_id: string | null; nombre: string; value_type: string; unidad: string | null;
-  mejor_mayor: boolean; status: string;
+  mejor_mayor: boolean; status: string; tiempo_formato: string | null;
 }
 
 const VALUE_TYPES = ["tiempo", "distancia", "repeticiones", "peso", "puntuacion", "booleano", "texto"];
@@ -30,12 +28,10 @@ export default function Marcas() {
   const isCoach = primaryRole === "entrenador" || primaryRole === "superadmin";
   const [cats, setCats] = useState<MarkCategory[]>([]);
   const [marks, setMarks] = useState<Mark[]>([]);
-  const [openCat, setOpenCat] = useState(false);
+  const [openCatManager, setOpenCatManager] = useState(false);
   const [openMark, setOpenMark] = useState(false);
-  const [editingCat, setEditingCat] = useState<MarkCategory | null>(null);
-  const [catForm, setCatForm] = useState({ nombre: "" });
   const [editingMark, setEditingMark] = useState<Mark | null>(null);
-  const [markForm, setMarkForm] = useState({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
+  const [markForm, setMarkForm] = useState({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false, tiempo_formato: "mm:ss" as TiempoFormato });
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState<string>("__all__");
   const [showArchived, setShowArchived] = useState(false);
@@ -50,53 +46,31 @@ export default function Marcas() {
   };
   useEffect(() => { load(); }, []);
 
-  const openCatDialog = (c?: MarkCategory) => {
-    if (c) { setEditingCat(c); setCatForm({ nombre: c.nombre }); }
-    else { setEditingCat(null); setCatForm({ nombre: "" }); }
-    setOpenCat(true);
-  };
-
-  const saveCat = async () => {
-    if (!catForm.nombre.trim()) return;
-    if (editingCat) {
-      const { error } = await supabase.from("mark_categories").update({ nombre: catForm.nombre }).eq("id", editingCat.id);
-      if (error) return toast.error(error.message);
-      toast.success("Categoría actualizada");
-    } else {
-      const { error } = await supabase.from("mark_categories").insert({ nombre: catForm.nombre });
-      if (error) return toast.error(error.message);
-      toast.success("Categoría creada");
-    }
-    setOpenCat(false); setEditingCat(null); setCatForm({ nombre: "" }); load();
-  };
-
-  const deleteCat = async (c: MarkCategory) => {
-    const enUso = marks.some((m) => m.category_id === c.id);
-    if (enUso) {
-      return toast.error("No puedes eliminar una categoría con marcas asociadas. Reasigna o elimina las marcas primero.");
-    }
-    const { error } = await supabase.from("mark_categories").delete().eq("id", c.id);
-    if (error) return toast.error(error.message);
-    toast.success("Categoría eliminada"); load();
-  };
-
   const openMarkDialog = (m?: Mark) => {
     if (m) {
       setEditingMark(m);
       setMarkForm({
         nombre: m.nombre, category_id: m.category_id ?? "",
         value_type: m.value_type, unidad: m.unidad ?? "", mejor_mayor: m.mejor_mayor,
+        tiempo_formato: (m.tiempo_formato as TiempoFormato) ?? "mm:ss",
       });
     } else {
       setEditingMark(null);
-      setMarkForm({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
+      setMarkForm({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false, tiempo_formato: "mm:ss" });
     }
     setOpenMark(true);
   };
 
   const saveMark = async () => {
     if (!markForm.nombre.trim()) return;
-    const payload: any = { ...markForm, category_id: markForm.category_id || null };
+    const payload: any = {
+      nombre: markForm.nombre,
+      category_id: markForm.category_id || null,
+      value_type: markForm.value_type,
+      unidad: markForm.unidad || null,
+      mejor_mayor: markForm.mejor_mayor,
+      tiempo_formato: markForm.value_type === "tiempo" ? markForm.tiempo_formato : null,
+    };
     if (editingMark) {
       const { error } = await supabase.from("marks").update(payload).eq("id", editingMark.id);
       if (error) return toast.error(error.message);
@@ -107,7 +81,7 @@ export default function Marcas() {
       toast.success("Marca creada");
     }
     setOpenMark(false); setEditingMark(null);
-    setMarkForm({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false });
+    setMarkForm({ nombre: "", category_id: "", value_type: "tiempo", unidad: "", mejor_mayor: false, tiempo_formato: "mm:ss" });
     load();
   };
 
@@ -117,6 +91,8 @@ export default function Marcas() {
     load();
   };
 
+  const usageCount = (catId: string) => marks.filter((m) => m.category_id === catId).length;
+
   return (
     <div>
       <PageHeader
@@ -125,14 +101,9 @@ export default function Marcas() {
         actions={
           isCoach && (
             <div className="flex gap-2">
-              <Dialog open={openCat} onOpenChange={(o) => { setOpenCat(o); if (!o) { setEditingCat(null); setCatForm({ nombre: "" }); } }}>
-                <DialogTrigger asChild><Button variant="outline" onClick={() => openCatDialog()}><Plus className="mr-2 h-4 w-4" /> Categoría</Button></DialogTrigger>
-                <DialogContent>
-                  <DialogHeader><DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle></DialogHeader>
-                  <div className="space-y-2"><Label>Nombre</Label><Input value={catForm.nombre} onChange={(e) => setCatForm({ nombre: e.target.value })} /></div>
-                  <DialogFooter><Button onClick={saveCat}>Guardar</Button></DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button variant="outline" onClick={() => setOpenCatManager(true)}>
+                <FolderTree className="mr-2 h-4 w-4" /> Categorías
+              </Button>
               <Dialog open={openMark} onOpenChange={setOpenMark}>
                 <DialogTrigger asChild><Button onClick={() => openMarkDialog()}><Plus className="mr-2 h-4 w-4" /> Marca</Button></DialogTrigger>
                 <DialogContent>
@@ -156,6 +127,17 @@ export default function Marcas() {
                       </div>
                       <div className="space-y-2"><Label>Unidad</Label><Input value={markForm.unidad} onChange={(e) => setMarkForm({ ...markForm, unidad: e.target.value })} /></div>
                     </div>
+                    {markForm.value_type === "tiempo" && (
+                      <div className="space-y-2">
+                        <Label>Formato de tiempo</Label>
+                        <Select value={markForm.tiempo_formato} onValueChange={(v) => setMarkForm({ ...markForm, tiempo_formato: v as TiempoFormato })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {TIEMPO_FORMATO_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label} <span className="text-muted-foreground text-xs ml-1">({o.placeholder})</span></SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2"><input id="mm" type="checkbox" checked={markForm.mejor_mayor} onChange={(e) => setMarkForm({ ...markForm, mejor_mayor: e.target.checked })} /><Label htmlFor="mm">Mejor valor es mayor</Label></div>
                   </div>
                   <DialogFooter><Button onClick={saveMark}>Guardar</Button></DialogFooter>
@@ -165,52 +147,17 @@ export default function Marcas() {
           )
         }
       />
-      {isCoach && (
-        <Card className="mb-4">
-          <CardHeader><CardTitle>Categorías ({cats.length})</CardTitle></CardHeader>
-          <CardContent>
-            {cats.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No hay categorías. Crea una con el botón "Categoría".</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {cats.map((c) => {
-                  const count = marks.filter((m) => m.category_id === c.id).length;
-                  return (
-                    <div key={c.id} className="flex items-center gap-1 border rounded-md pl-3 pr-1 py-1 bg-muted/30">
-                      <span className="text-sm font-medium">{c.nombre}</span>
-                      <Badge variant="outline" className="text-xs">{count}</Badge>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => openCatDialog(c)} title="Editar">
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Eliminar">
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Eliminar categoría "{c.nombre}"?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {count > 0
-                                ? `No se puede eliminar: tiene ${count} marca(s) asociada(s). Reasígnalas o elimínalas primero.`
-                                : "Esta acción no se puede deshacer."}
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteCat(c)} disabled={count > 0}>Eliminar</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+
+      <CategoryManagerDialog
+        open={openCatManager}
+        onOpenChange={setOpenCatManager}
+        tableName="mark_categories"
+        title="Gestionar categorías de marcas"
+        categories={cats}
+        usageCount={usageCount}
+        onChanged={load}
+      />
+
       <Card>
         <CardHeader><CardTitle>Marcas configuradas ({marks.length})</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
@@ -229,7 +176,7 @@ export default function Marcas() {
             </label>
           </div>
           <Table>
-            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
+            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Formato</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
             <TableBody>
               {marks.filter(m => {
                 if (filterCat !== "__all__" && m.category_id !== filterCat) return false;
@@ -241,6 +188,7 @@ export default function Marcas() {
                   <TableCell className="font-medium">{m.nombre}</TableCell>
                   <TableCell>{cats.find(c => c.id === m.category_id)?.nombre ?? "—"}</TableCell>
                   <TableCell><Badge variant="outline">{m.value_type}</Badge></TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{m.value_type === "tiempo" ? (m.tiempo_formato ?? "—") : "—"}</TableCell>
                   <TableCell>{m.unidad}</TableCell>
                   <TableCell>{m.mejor_mayor ? "Mayor" : "Menor"}</TableCell>
                   <TableCell><Badge variant={m.status === "activo" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
