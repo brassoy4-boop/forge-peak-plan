@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Target, ChevronDown, ChevronUp, Archive, ArchiveRestore, X, Trash2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { canExecuteSimulacro, isValidTime, isValidNumber, type Sexo } from "@/lib/validators";
+import { canExecuteSimulacro, parseMarkValue, tiempoPlaceholder, type Sexo, type TiempoFormato } from "@/lib/validators";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { SortableItem } from "@/components/SortableItem";
@@ -54,7 +54,7 @@ export default function Simulacros() {
 
   const load = async () => {
     const [t, o, m, e] = await Promise.all([
-      supabase.from("simulacro_templates").select("*, oposiciones(nombre), simulacro_template_marks(mark_id, marks(nombre, unidad, value_type))"),
+      supabase.from("simulacro_templates").select("*, oposiciones(nombre), simulacro_template_marks(mark_id, marks(nombre, unidad, value_type, tiempo_formato))"),
       supabase.from("oposiciones").select("*"),
       supabase.from("marks").select("*").eq("status", "activo").order("nombre"),
       user ? supabase.from("simulacro_executions").select("*, simulacro_templates(nombre, oposiciones(nombre))").order("fecha", { ascending: false }).limit(30) : Promise.resolve({ data: [] } as any),
