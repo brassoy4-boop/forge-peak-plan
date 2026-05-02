@@ -142,6 +142,16 @@ export default function Ejercicios() {
         </label>
       </div>
 
+      <CategoryManagerDialog
+        open={openCatManager}
+        onOpenChange={setOpenCatManager}
+        tableName="exercise_categories"
+        title="Gestionar categorías de ejercicios"
+        categories={cats}
+        usageCount={usageCount}
+        onChanged={load}
+      />
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {visible.map((ex) => (
           <Card key={ex.id} className="overflow-hidden">
