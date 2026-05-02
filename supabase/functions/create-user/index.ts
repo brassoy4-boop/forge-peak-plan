@@ -19,6 +19,7 @@ interface Body {
   fecha_nacimiento?: string | null;
   peso?: number | null;
   altura?: number | null;
+  avatar_url?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -122,6 +123,7 @@ Deno.serve(async (req) => {
     if (body.fecha_nacimiento) profileUpdate.fecha_nacimiento = body.fecha_nacimiento;
     if (body.peso != null) profileUpdate.peso = body.peso;
     if (body.altura != null) profileUpdate.altura = body.altura;
+    if (body.avatar_url) profileUpdate.avatar_url = body.avatar_url;
     if (Object.keys(profileUpdate).length > 0) {
       await admin.from("profiles").update(profileUpdate).eq("user_id", newUserId);
     }
