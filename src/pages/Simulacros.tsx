@@ -120,25 +120,24 @@ export default function Simulacros() {
   const saveRun = async () => {
     if (!running || !targetUserId) return;
     if (!sexoCheck.ok) return toast.error(sexoCheck.reason ?? "No autorizado");
-    // Validar formato por tipo de marca
+    // Validar y parsear según tipo de marca
+    const parsedRows: { mark_id: string; valor_numerico: number | null; valor_texto: string | null }[] = [];
     for (const stm of running.simulacro_template_marks ?? []) {
-      const v = results[stm.mark_id];
-      if (!v) continue;
+      const v = (results[stm.mark_id] ?? "").toString();
+      if (!v.trim()) continue;
       const tipo = stm.marks?.value_type;
-      if (tipo === "tiempo" && !isValidTime(v)) {
-        return toast.error(`Tiempo inválido en "${stm.marks?.nombre}". Usa mm:ss o mm:ss.cc`);
+      const fmt = stm.marks?.tiempo_formato as TiempoFormato | null;
+      const r = parseMarkValue(v, tipo, fmt);
+      if (!r.ok) {
+        return toast.error(`"${stm.marks?.nombre}": ${r.error}`);
       }
-      if (["distancia","repeticiones","peso","puntuacion"].includes(tipo) && !isValidNumber(v)) {
-        return toast.error(`Valor numérico inválido en "${stm.marks?.nombre}"`);
-      }
+      parsedRows.push({ mark_id: stm.mark_id, valor_numerico: r.valor_numerico, valor_texto: r.valor_texto });
     }
     const { data: ex, error } = await supabase.from("simulacro_executions").insert({
       template_id: running.id, user_id: targetUserId, coach_id: isCoach ? user?.id : null, observaciones: obs,
     }).select().single();
     if (error) return toast.error(error.message);
-    const rows = Object.entries(results).filter(([_, v]) => v).map(([mark_id, valor]) => ({
-      execution_id: ex.id, mark_id, valor_numerico: Number(valor) || null, valor_texto: isNaN(Number(valor)) ? valor : null,
-    }));
+    const rows = parsedRows.map((r) => ({ execution_id: ex.id, ...r }));
     if (rows.length) {
       await supabase.from("simulacro_results").insert(rows);
       await supabase.from("mark_records").insert(rows.map(r => ({
