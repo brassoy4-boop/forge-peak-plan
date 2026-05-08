@@ -330,14 +330,14 @@ function TestCard({
       </CardHeader>
       {open && (
         <CardContent>
-          <p className="lg:hidden text-xs text-muted-foreground mb-2">Desliza horizontalmente para ver todos los datos →</p>
+          <p className="lg:hidden text-xs text-muted-foreground mb-2">Desliza horizontalmente — la columna del nombre queda fija →</p>
           <div className="overflow-x-auto -mx-6 px-6">
             <Table>
               <TableHeader>
                 <TableRow>
-                  {/* Identificación — gris oscuro */}
-                  <TableHead className="w-10 bg-neutral-700 text-white text-center">Nº</TableHead>
-                  <TableHead className="min-w-[180px] bg-neutral-700 text-white text-center">NOMBRE</TableHead>
+                  {/* Identificación — gris oscuro (sticky en móvil) */}
+                  <TableHead className="w-10 bg-neutral-700 text-white text-center sticky left-0 z-20">Nº</TableHead>
+                  <TableHead className="min-w-[160px] bg-neutral-700 text-white text-center sticky left-10 z-20 shadow-[2px_0_4px_rgba(0,0,0,0.15)]">NOMBRE</TableHead>
                   {/* Datos personales — naranja claro */}
                   <TableHead className="bg-orange-200 text-neutral-900 text-center">SEXO</TableHead>
                   <TableHead className="min-w-[140px] bg-orange-200 text-neutral-900 text-center">F. NACIMIENTO</TableHead>
@@ -436,8 +436,8 @@ function ParticipantRow({
 
   return (
     <TableRow>
-      <TableCell className="text-xs text-muted-foreground">{n}</TableCell>
-      <TableCell className="text-sm font-medium">
+      <TableCell className="text-xs text-muted-foreground sticky left-0 z-10 bg-background">{n}</TableCell>
+      <TableCell className="text-sm font-medium sticky left-10 z-10 bg-background shadow-[2px_0_4px_rgba(0,0,0,0.08)]">
         {profile ? `${profile.nombre} ${profile.apellidos}` : "—"}
       </TableCell>
       <TableCell>
