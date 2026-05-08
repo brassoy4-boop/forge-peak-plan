@@ -330,7 +330,8 @@ function TestCard({
       </CardHeader>
       {open && (
         <CardContent>
-          <div className="overflow-x-auto">
+          <p className="md:hidden text-xs text-muted-foreground mb-2">Desliza horizontalmente para ver todos los datos →</p>
+          <div className="overflow-x-auto -mx-6 px-6">
             <Table>
               <TableHeader>
                 <TableRow>
