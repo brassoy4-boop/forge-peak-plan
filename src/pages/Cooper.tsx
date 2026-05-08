@@ -825,41 +825,74 @@ function CooperUser({ userId }: { userId: string }) {
             </TabsList>
             <TabsContent value="historico">
               <Card>
-                <CardContent className="pt-6 overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Test</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Fase</TableHead>
-                        <TableHead>Dist (m)</TableHead>
-                        <TableHead>VAM</TableHead>
-                        <TableHead>VO2max</TableHead>
-                        <TableHead>Nivel</TableHead>
-                        <TableHead>R-Umbral</TableHead>
-                        <TableHead>Billat</TableHead>
-                        <TableHead>Zona 1</TableHead>
-                        <TableHead>Recup.</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {enriched.map((e) => (
-                        <TableRow key={e.r.id}>
-                          <TableCell>{e.t.nombre}</TableCell>
-                          <TableCell className="text-xs">{new Date(e.t.fecha).toLocaleDateString("es-ES")}</TableCell>
-                          <TableCell className="text-xs">{FASES.find((f) => f.id === e.t.fase)?.short ?? "—"}</TableCell>
-                          <TableCell className="font-medium">{e.r.distancia_m}</TableCell>
-                          <TableCell>{e.d.vam ?? "—"}</TableCell>
-                          <TableCell>{e.d.vo2max ?? "—"}</TableCell>
-                          <TableCell>{e.d.nivel && <Badge variant="outline" className={nivelColor(e.d.nivel)}>{e.d.nivel}</Badge>}</TableCell>
-                          <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.rUmbral.minPorKm} · ${e.d.ritmos.rUmbral.segPor400}` : "—"}</TableCell>
-                          <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.billat.minPorKm} · ${e.d.ritmos.billat.segPor400}` : "—"}</TableCell>
-                          <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.zona1.minPorKm} · ${e.d.ritmos.zona1.segPor400}` : "—"}</TableCell>
-                          <TableCell className="text-xs">{recuperacionLabel(e.d.recuperacion)}</TableCell>
+                <CardContent className="pt-6">
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Test</TableHead>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead>Fase</TableHead>
+                          <TableHead>Dist (m)</TableHead>
+                          <TableHead>VAM</TableHead>
+                          <TableHead>VO2max</TableHead>
+                          <TableHead>Nivel</TableHead>
+                          <TableHead>R-Umbral</TableHead>
+                          <TableHead>Billat</TableHead>
+                          <TableHead>Zona 1</TableHead>
+                          <TableHead>Recup.</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {enriched.map((e) => (
+                          <TableRow key={e.r.id}>
+                            <TableCell>{e.t.nombre}</TableCell>
+                            <TableCell className="text-xs">{new Date(e.t.fecha).toLocaleDateString("es-ES")}</TableCell>
+                            <TableCell className="text-xs">{FASES.find((f) => f.id === e.t.fase)?.short ?? "—"}</TableCell>
+                            <TableCell className="font-medium">{e.r.distancia_m}</TableCell>
+                            <TableCell>{e.d.vam ?? "—"}</TableCell>
+                            <TableCell>{e.d.vo2max ?? "—"}</TableCell>
+                            <TableCell>{e.d.nivel && <Badge variant="outline" className={nivelColor(e.d.nivel)}>{e.d.nivel}</Badge>}</TableCell>
+                            <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.rUmbral.minPorKm} · ${e.d.ritmos.rUmbral.segPor400}` : "—"}</TableCell>
+                            <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.billat.minPorKm} · ${e.d.ritmos.billat.segPor400}` : "—"}</TableCell>
+                            <TableCell className="text-xs">{e.d.ritmos ? `${e.d.ritmos.zona1.minPorKm} · ${e.d.ritmos.zona1.segPor400}` : "—"}</TableCell>
+                            <TableCell className="text-xs">{recuperacionLabel(e.d.recuperacion)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile cards */}
+                  <div className="md:hidden space-y-2">
+                    {enriched.map((e) => (
+                      <div key={e.r.id} className="rounded-md border bg-card p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{e.t.nombre}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(e.t.fecha).toLocaleDateString("es-ES")} · {FASES.find((f) => f.id === e.t.fase)?.short ?? "—"}
+                            </div>
+                          </div>
+                          {e.d.nivel && <Badge variant="outline" className={nivelColor(e.d.nivel)}>{e.d.nivel}</Badge>}
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          <div><div className="text-muted-foreground">Dist</div><div className="font-medium">{e.r.distancia_m} m</div></div>
+                          <div><div className="text-muted-foreground">VAM</div><div className="font-medium">{e.d.vam ?? "—"}</div></div>
+                          <div><div className="text-muted-foreground">VO2max</div><div className="font-medium">{e.d.vo2max ?? "—"}</div></div>
+                        </div>
+                        {e.d.ritmos && (
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            <div>R-Umbral: {e.d.ritmos.rUmbral.minPorKm} · {e.d.ritmos.rUmbral.segPor400}</div>
+                            <div>Billat: {e.d.ritmos.billat.minPorKm} · {e.d.ritmos.billat.segPor400}</div>
+                            <div>Zona 1: {e.d.ritmos.zona1.minPorKm} · {e.d.ritmos.zona1.segPor400}</div>
+                          </div>
+                        )}
+                        <div className="text-xs">Recup.: {recuperacionLabel(e.d.recuperacion)}</div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
