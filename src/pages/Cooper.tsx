@@ -330,7 +330,7 @@ function TestCard({
       </CardHeader>
       {open && (
         <CardContent>
-          <p className="md:hidden text-xs text-muted-foreground mb-2">Desliza horizontalmente para ver todos los datos →</p>
+          <p className="lg:hidden text-xs text-muted-foreground mb-2">Desliza horizontalmente para ver todos los datos →</p>
           <div className="overflow-x-auto -mx-6 px-6">
             <Table>
               <TableHeader>
@@ -827,7 +827,7 @@ function CooperUser({ userId }: { userId: string }) {
               <Card>
                 <CardContent className="pt-6">
                   {/* Desktop table */}
-                  <div className="hidden md:block overflow-x-auto">
+                  <div className="hidden lg:block overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -865,7 +865,7 @@ function CooperUser({ userId }: { userId: string }) {
                   </div>
 
                   {/* Mobile cards */}
-                  <div className="md:hidden space-y-2">
+                  <div className="lg:hidden space-y-2">
                     {enriched.map((e) => (
                       <div key={e.r.id} className="rounded-md border bg-card p-3 space-y-2">
                         <div className="flex items-start justify-between gap-2">

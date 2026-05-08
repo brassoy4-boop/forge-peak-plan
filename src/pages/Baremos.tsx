@@ -125,7 +125,7 @@ export default function Baremos() {
       <Card>
         <CardContent className="pt-6">
           {/* Desktop table */}
-          <div className="hidden md:block overflow-x-auto">
+          <div className="hidden lg:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -156,7 +156,7 @@ export default function Baremos() {
           </div>
 
           {/* Mobile cards */}
-          <div className="md:hidden space-y-2">
+          <div className="lg:hidden space-y-2">
             {filtered.map((b) => (
               <div key={b.id} className="rounded-md border bg-card p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
