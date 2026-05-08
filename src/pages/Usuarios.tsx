@@ -267,7 +267,7 @@ export default function Usuarios() {
         <Card>
           <CardContent className="pt-6">
             {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto">
+            <div className="hidden lg:block overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -335,7 +335,7 @@ export default function Usuarios() {
             </div>
 
             {/* Mobile cards */}
-            <div className="md:hidden space-y-2">
+            <div className="lg:hidden space-y-2">
               {filtered.map((p) => {
                 const opos = userOpos.filter(uo => uo.user_id === p.user_id);
                 const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id && ra.activa);

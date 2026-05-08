@@ -186,7 +186,7 @@ export default function Marcas() {
             return (
               <>
                 {/* Desktop table */}
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden lg:block overflow-x-auto">
                   <Table>
                     <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Formato</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
                     <TableBody>
@@ -214,7 +214,7 @@ export default function Marcas() {
                 </div>
 
                 {/* Mobile cards */}
-                <div className="md:hidden space-y-2">
+                <div className="lg:hidden space-y-2">
                   {visible.map((m) => (
                     <div key={m.id} className="rounded-md border bg-card p-3 space-y-2">
                       <div className="flex items-start justify-between gap-2">
