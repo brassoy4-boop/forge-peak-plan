@@ -436,8 +436,8 @@ function ParticipantRow({
 
   return (
     <TableRow>
-      <TableCell className="text-xs text-muted-foreground">{n}</TableCell>
-      <TableCell className="text-sm font-medium">
+      <TableCell className="text-xs text-muted-foreground sticky left-0 z-10 bg-background">{n}</TableCell>
+      <TableCell className="text-sm font-medium sticky left-10 z-10 bg-background shadow-[2px_0_4px_rgba(0,0,0,0.08)]">
         {profile ? `${profile.nombre} ${profile.apellidos}` : "—"}
       </TableCell>
       <TableCell>
