@@ -123,34 +123,60 @@ export default function Baremos() {
       </div>
 
       <Card>
-        <CardContent className="pt-6 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Marca</TableHead><TableHead>Oposición</TableHead><TableHead>Sexo</TableHead>
-                <TableHead>Nivel</TableHead><TableHead>Mín</TableHead><TableHead>Máx</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((b) => (
-                <TableRow key={b.id}>
-                  <TableCell>{marks.find(m => m.id === b.mark_id)?.nombre ?? "—"}</TableCell>
-                  <TableCell>{oposiciones.find(o => o.id === b.oposicion_id)?.nombre ?? "Cualquiera"}</TableCell>
-                  <TableCell><Badge variant="outline">{b.sexo}</Badge></TableCell>
-                  <TableCell><Badge variant="outline" className={NIVEL_COLORS[b.nivel] ?? ""}>{b.nivel}</Badge></TableCell>
-                  <TableCell>{b.valor_min ?? "−∞"}</TableCell>
-                  <TableCell>{b.valor_max ?? "+∞"}</TableCell>
-                  <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" onClick={() => remove(b.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </TableCell>
+        <CardContent className="pt-6">
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Marca</TableHead><TableHead>Oposición</TableHead><TableHead>Sexo</TableHead>
+                  <TableHead>Nivel</TableHead><TableHead>Mín</TableHead><TableHead>Máx</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Sin baremos.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((b) => (
+                  <TableRow key={b.id}>
+                    <TableCell>{marks.find(m => m.id === b.mark_id)?.nombre ?? "—"}</TableCell>
+                    <TableCell>{oposiciones.find(o => o.id === b.oposicion_id)?.nombre ?? "Cualquiera"}</TableCell>
+                    <TableCell><Badge variant="outline">{b.sexo}</Badge></TableCell>
+                    <TableCell><Badge variant="outline" className={NIVEL_COLORS[b.nivel] ?? ""}>{b.nivel}</Badge></TableCell>
+                    <TableCell>{b.valor_min ?? "−∞"}</TableCell>
+                    <TableCell>{b.valor_max ?? "+∞"}</TableCell>
+                    <TableCell className="text-right">
+                      <Button size="icon" variant="ghost" onClick={() => remove(b.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {filtered.length === 0 && (
+                  <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Sin baremos.</TableCell></TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-2">
+            {filtered.map((b) => (
+              <div key={b.id} className="rounded-md border bg-card p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{marks.find(m => m.id === b.mark_id)?.nombre ?? "—"}</div>
+                    <div className="text-xs text-muted-foreground truncate">{oposiciones.find(o => o.id === b.oposicion_id)?.nombre ?? "Cualquiera"}</div>
+                  </div>
+                  <Button size="icon" variant="ghost" onClick={() => remove(b.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+                <div className="flex flex-wrap gap-1 text-xs">
+                  <Badge variant="outline">{b.sexo}</Badge>
+                  <Badge variant="outline" className={NIVEL_COLORS[b.nivel] ?? ""}>{b.nivel}</Badge>
+                  <Badge variant="outline">{(b.valor_min ?? "−∞")} – {(b.valor_max ?? "+∞")}</Badge>
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div className="text-center text-muted-foreground py-8 text-sm">Sin baremos.</div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

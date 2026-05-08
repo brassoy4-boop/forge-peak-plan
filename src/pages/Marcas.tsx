@@ -160,11 +160,11 @@ export default function Marcas() {
 
       <Card>
         <CardHeader><CardTitle>Marcas configuradas ({marks.length})</CardTitle></CardHeader>
-        <CardContent className="overflow-x-auto">
-          <div className="mb-4 flex flex-wrap gap-2 items-center">
-            <Input className="max-w-xs" placeholder="Buscar marca..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <CardContent>
+          <div className="mb-4 flex flex-col md:flex-row md:flex-wrap gap-2 md:items-center">
+            <Input className="md:max-w-xs" placeholder="Buscar marca..." value={search} onChange={(e) => setSearch(e.target.value)} />
             <Select value={filterCat} onValueChange={setFilterCat}>
-              <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="md:max-w-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">Todas las categorías</SelectItem>
                 {cats.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
@@ -175,35 +175,80 @@ export default function Marcas() {
               Mostrar archivadas
             </label>
           </div>
-          <Table>
-            <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Formato</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
-            <TableBody>
-              {marks.filter(m => {
-                if (filterCat !== "__all__" && m.category_id !== filterCat) return false;
-                if (!showArchived && m.status !== "activo") return false;
-                if (search.trim() && !m.nombre.toLowerCase().includes(search.toLowerCase())) return false;
-                return true;
-              }).map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-medium">{m.nombre}</TableCell>
-                  <TableCell>{cats.find(c => c.id === m.category_id)?.nombre ?? "—"}</TableCell>
-                  <TableCell><Badge variant="outline">{m.value_type}</Badge></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{m.value_type === "tiempo" ? (m.tiempo_formato ?? "—") : "—"}</TableCell>
-                  <TableCell>{m.unidad}</TableCell>
-                  <TableCell>{m.mejor_mayor ? "Mayor" : "Menor"}</TableCell>
-                  <TableCell><Badge variant={m.status === "activo" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
-                  {isCoach && (
-                    <TableCell className="text-right space-x-1">
-                      <Button size="sm" variant="ghost" onClick={() => openMarkDialog(m)}><Pencil className="h-3 w-3" /></Button>
-                      <Button size="sm" variant="ghost" onClick={() => toggleMarkStatus(m)} title={m.status === "activo" ? "Archivar" : "Reactivar"}>
-                        {m.status === "activo" ? <Archive className="h-3 w-3" /> : <Power className="h-3 w-3" />}
-                      </Button>
-                    </TableCell>
+
+          {(() => {
+            const visible = marks.filter(m => {
+              if (filterCat !== "__all__" && m.category_id !== filterCat) return false;
+              if (!showArchived && m.status !== "activo") return false;
+              if (search.trim() && !m.nombre.toLowerCase().includes(search.toLowerCase())) return false;
+              return true;
+            });
+            return (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <Table>
+                    <TableHeader><TableRow><TableHead>Nombre</TableHead><TableHead>Categoría</TableHead><TableHead>Tipo</TableHead><TableHead>Formato</TableHead><TableHead>Unidad</TableHead><TableHead>Mejor</TableHead><TableHead>Estado</TableHead>{isCoach && <TableHead className="text-right">Acciones</TableHead>}</TableRow></TableHeader>
+                    <TableBody>
+                      {visible.map((m) => (
+                        <TableRow key={m.id}>
+                          <TableCell className="font-medium">{m.nombre}</TableCell>
+                          <TableCell>{cats.find(c => c.id === m.category_id)?.nombre ?? "—"}</TableCell>
+                          <TableCell><Badge variant="outline">{m.value_type}</Badge></TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{m.value_type === "tiempo" ? (m.tiempo_formato ?? "—") : "—"}</TableCell>
+                          <TableCell>{m.unidad}</TableCell>
+                          <TableCell>{m.mejor_mayor ? "Mayor" : "Menor"}</TableCell>
+                          <TableCell><Badge variant={m.status === "activo" ? "default" : "secondary"}>{m.status}</Badge></TableCell>
+                          {isCoach && (
+                            <TableCell className="text-right space-x-1">
+                              <Button size="sm" variant="ghost" onClick={() => openMarkDialog(m)}><Pencil className="h-3 w-3" /></Button>
+                              <Button size="sm" variant="ghost" onClick={() => toggleMarkStatus(m)} title={m.status === "activo" ? "Archivar" : "Reactivar"}>
+                                {m.status === "activo" ? <Archive className="h-3 w-3" /> : <Power className="h-3 w-3" />}
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-2">
+                  {visible.map((m) => (
+                    <div key={m.id} className="rounded-md border bg-card p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{m.nombre}</div>
+                          <div className="text-xs text-muted-foreground">{cats.find(c => c.id === m.category_id)?.nombre ?? "Sin categoría"}</div>
+                        </div>
+                        <Badge variant={m.status === "activo" ? "default" : "secondary"}>{m.status}</Badge>
+                      </div>
+                      <div className="flex flex-wrap gap-1 text-xs">
+                        <Badge variant="outline">{m.value_type}</Badge>
+                        {m.value_type === "tiempo" && m.tiempo_formato && <Badge variant="outline">{m.tiempo_formato}</Badge>}
+                        {m.unidad && <Badge variant="outline">{m.unidad}</Badge>}
+                        <Badge variant="outline">{m.mejor_mayor ? "Mejor: mayor" : "Mejor: menor"}</Badge>
+                      </div>
+                      {isCoach && (
+                        <div className="flex gap-2 pt-1">
+                          <Button size="sm" variant="outline" className="flex-1" onClick={() => openMarkDialog(m)}>
+                            <Pencil className="h-3 w-3 mr-1" /> Editar
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1" onClick={() => toggleMarkStatus(m)}>
+                            {m.status === "activo" ? <><Archive className="h-3 w-3 mr-1" /> Archivar</> : <><Power className="h-3 w-3 mr-1" /> Reactivar</>}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {visible.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8 text-sm">Sin marcas.</div>
                   )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                </div>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
     </div>
