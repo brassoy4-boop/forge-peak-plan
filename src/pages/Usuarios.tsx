@@ -265,71 +265,118 @@ export default function Usuarios() {
         </div>
 
         <Card>
-          <CardContent className="pt-6 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Deportista</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Oposiciones</TableHead>
-                  <TableHead>Rutinas activas</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((p) => {
-                  const opos = userOpos.filter(uo => uo.user_id === p.user_id);
-                  const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id && ra.activa);
-                  const mainRole = mainRoleOf(p.user_id);
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9">
-                            <AvatarImage src={p.avatar_url ?? undefined} />
-                            <AvatarFallback>{initialsOf(p.nombre, p.apellidos)}</AvatarFallback>
-                          </Avatar>
-                          <span>{p.nombre} {p.apellidos}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{p.email}</TableCell>
-                      <TableCell>
-                        <Badge variant={mainRole === "superadmin" ? "destructive" : mainRole === "entrenador" ? "default" : "secondary"}>
-                          {mainRole}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <div className="flex flex-wrap gap-1">
-                          {opos.map((uo) => {
-                            const o = oposiciones.find(x => x.id === uo.oposicion_id);
-                            return o ? <Badge key={uo.id} variant="secondary">{o.nombre}</Badge> : null;
-                          })}
-                          {opos.length === 0 && "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <div className="flex flex-wrap gap-1">
-                          {userRoutinesList.map((ra) => {
-                            const r = routines.find(x => x.id === ra.routine_id);
-                            return r ? <Badge key={ra.id} variant="default">{r.nombre}</Badge> : null;
-                          })}
-                          {userRoutinesList.length === 0 && "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
-                        <Button variant="outline" size="sm" onClick={() => openEdit(p)} title="Editar perfil">
-                          <Pencil className="h-3 w-3 mr-1" /> Editar
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Sin resultados.</TableCell></TableRow>
-                )}
-              </TableBody>
-            </Table>
+          <CardContent className="pt-6">
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Deportista</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Rol</TableHead>
+                    <TableHead>Oposiciones</TableHead>
+                    <TableHead>Rutinas activas</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((p) => {
+                    const opos = userOpos.filter(uo => uo.user_id === p.user_id);
+                    const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id && ra.activa);
+                    const mainRole = mainRoleOf(p.user_id);
+                    return (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={p.avatar_url ?? undefined} />
+                              <AvatarFallback>{initialsOf(p.nombre, p.apellidos)}</AvatarFallback>
+                            </Avatar>
+                            <span>{p.nombre} {p.apellidos}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-sm">{p.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={mainRole === "superadmin" ? "destructive" : mainRole === "entrenador" ? "default" : "secondary"}>
+                            {mainRole}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex flex-wrap gap-1">
+                            {opos.map((uo) => {
+                              const o = oposiciones.find(x => x.id === uo.oposicion_id);
+                              return o ? <Badge key={uo.id} variant="secondary">{o.nombre}</Badge> : null;
+                            })}
+                            {opos.length === 0 && "—"}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex flex-wrap gap-1">
+                            {userRoutinesList.map((ra) => {
+                              const r = routines.find(x => x.id === ra.routine_id);
+                              return r ? <Badge key={ra.id} variant="default">{r.nombre}</Badge> : null;
+                            })}
+                            {userRoutinesList.length === 0 && "—"}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <Button variant="outline" size="sm" onClick={() => openEdit(p)} title="Editar perfil">
+                            <Pencil className="h-3 w-3 mr-1" /> Editar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">Sin resultados.</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="md:hidden space-y-2">
+              {filtered.map((p) => {
+                const opos = userOpos.filter(uo => uo.user_id === p.user_id);
+                const userRoutinesList = routineAssignments.filter(ra => ra.user_id === p.user_id && ra.activa);
+                const mainRole = mainRoleOf(p.user_id);
+                return (
+                  <div key={p.id} className="rounded-md border bg-card p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={p.avatar_url ?? undefined} />
+                        <AvatarFallback>{initialsOf(p.nombre, p.apellidos)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate">{p.nombre} {p.apellidos}</div>
+                        <div className="text-xs text-muted-foreground truncate">{p.email}</div>
+                      </div>
+                      <Badge variant={mainRole === "superadmin" ? "destructive" : mainRole === "entrenador" ? "default" : "secondary"}>
+                        {mainRole}
+                      </Badge>
+                    </div>
+                    {(opos.length > 0 || userRoutinesList.length > 0) && (
+                      <div className="flex flex-wrap gap-1">
+                        {opos.map((uo) => {
+                          const o = oposiciones.find(x => x.id === uo.oposicion_id);
+                          return o ? <Badge key={uo.id} variant="secondary" className="text-xs">{o.nombre}</Badge> : null;
+                        })}
+                        {userRoutinesList.map((ra) => {
+                          const r = routines.find(x => x.id === ra.routine_id);
+                          return r ? <Badge key={ra.id} variant="default" className="text-xs">{r.nombre}</Badge> : null;
+                        })}
+                      </div>
+                    )}
+                    <Button variant="outline" size="sm" className="w-full" onClick={() => openEdit(p)}>
+                      <Pencil className="h-3 w-3 mr-1" /> Editar
+                    </Button>
+                  </div>
+                );
+              })}
+              {filtered.length === 0 && (
+                <div className="text-center text-muted-foreground py-8 text-sm">Sin resultados.</div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
